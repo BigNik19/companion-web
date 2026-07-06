@@ -342,29 +342,40 @@ export default function App() {
   const [chatWith, setChatWith] = useState(null);
   const [chatConfirm, setChatConfirm] = useState(false);
   const [saveState, setSaveState] = useState("idle");
+  const [pendingProfile, setPendingProfile] = useState(null);
   const saveT = useRef(null);
   const acctRef = useRef(null);
 
   const afterAuth = async (session) => {
     const uid = session.user.id, email = session.user.email;
     const map = await loadAllAccounts();
-    if (email === DEV.email) { setUsers(map); setIsDev(true); setMe(null); setLoaded(true); return; }
+    if (email === DEV.email) { setUsers(map); setIsDev(true); setMe(null); setPendingProfile(null); setLoaded(true); return; }
     const uname = Object.keys(map).find((k) => map[k].id === uid);
     if (uname) {
       const acc = map[uname];
       let changed = false;
-      // repair any duplicate pet ids (which would make switching show the wrong pet's XP)
+      // ensure each pet is an independent record with a unique id + sane fields
       const seenIds = new Set();
-      (acc.pets || []).forEach((p) => { if (seenIds.has(p.id)) { p.id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); changed = true; } seenIds.add(p.id); });
-      if (changed && !(acc.pets || []).some((p) => p.id === acc.activePet)) acc.activePet = acc.pets[0].id;
+      (acc.pets || []).forEach((p) => {
+        if (!p.id || seenIds.has(p.id)) { p.id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); changed = true; }
+        seenIds.add(p.id);
+        if (p.prestige == null) p.prestige = 0;
+        if (p.vitality == null) p.vitality = 50;
+        if (p.xp == null) p.xp = 0;
+        if (p.totalXp == null) p.totalXp = 0;
+      });
+      if (!(acc.pets || []).some((p) => p.id === acc.activePet)) { acc.activePet = acc.pets[0].id; changed = true; }
       if (acc.lastCompletedDate !== todayKey() && (acc.habits || []).some((h) => h.done)) {
         acc.habits = acc.habits.map((h) => ({ ...h, done: false })); changed = true;
       }
       if (pruneOutbox(acc, map)) changed = true;
       if (changed) { map[uname] = acc; saveAccountRow(acc); }
+      setMe(uname); setPendingProfile(null);
+    } else {
+      // authenticated but no profile row (e.g. account was deleted) — send them to set one up
+      setMe(null); setPendingProfile({ uid, email });
     }
     setUsers(map);
-    setMe(uname || null);
     setLoaded(true);
   };
   const onAuthed = async () => { const { data: { session } } = await supabase.auth.getSession(); if (session) await afterAuth(session); };
@@ -414,6 +425,7 @@ export default function App() {
 
   if (!loaded) return <Splash />;
   if (isDev) return <DevDashboard users={users} onLogout={logout} onDelete={deleteUser} />;
+  if (pendingProfile) return <ProfileSetup uid={pendingProfile.uid} email={pendingProfile.email} users={users} onDone={onAuthed} onLogout={logout} />;
   if (!me || !acct) return <Auth onAuthed={onAuthed} />;
 
   const pet = active();
@@ -602,7 +614,7 @@ function Auth({ onAuthed }) {
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
         if (error) { setErr(error.message); setBusy(false); return; }
-        await onAuthed(); return;
+        await onAuthed(); setBusy(false); return;
       }
       const un = username.trim().toLowerCase(), pn = pet.trim(), em = email.trim();
       if (!em || !pass || !un || !pn) { setErr("Fill in every field."); setBusy(false); return; }
@@ -619,7 +631,7 @@ function Auth({ onAuthed }) {
       const dataBlob = newAccountData(em, species, petName);
       const { error: e2 } = await supabase.from("accounts").insert({ id: sd.user.id, username: un, data: dataBlob, total_xp: 0, streak: 0, best: 0 });
       if (e2) { setErr(/duplicate|unique/i.test(e2.message) ? "That username is taken." : e2.message); await supabase.auth.signOut(); setBusy(false); return; }
-      await onAuthed(); return;
+      await onAuthed(); setBusy(false); return;
     } catch (ex) { setErr(String((ex && ex.message) || ex)); setBusy(false); }
   };
 
@@ -742,6 +754,38 @@ function ChatOverlay({ users, me, friends, chatWith, setChatWith, onClose, onSen
   );
 }
 
+/* ============================ PROFILE SETUP (rebuild after deletion) ============================ */
+function ProfileSetup({ uid, email, users, onDone, onLogout }) {
+  const [username, setUsername] = useState(""), [pet, setPet] = useState(""), [species, setSpecies] = useState("florn"), [err, setErr] = useState(""), [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setErr(""); setBusy(true);
+    const un = username.trim().toLowerCase(), pn = pet.trim();
+    if (!un || !pn) { setErr("Fill in every field."); setBusy(false); return; }
+    if (un === "dev") { setErr("That username is reserved."); setBusy(false); return; }
+    if (Object.values(users).some((x) => x.username.toLowerCase() === un)) { setErr("That username is taken."); setBusy(false); return; }
+    let petName = pn, i = 2; const taken = allPetNames(users);
+    while (taken.has(petName.toLowerCase())) petName = `${pn} ${i++}`;
+    const dataBlob = newAccountData(email, species, petName);
+    const { error } = await supabase.from("accounts").insert({ id: uid, username: un, data: dataBlob, total_xp: 0, streak: 0, best: 0 });
+    if (error) { setErr(/duplicate|unique/i.test(error.message) ? "That username is taken." : error.message); setBusy(false); return; }
+    await onDone(); setBusy(false);
+  };
+  return <div className="wrap"><Style /><div className="phone" style={{ overflowY: "auto", padding: "44px 26px" }}>
+    <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}><Creature species={species} stage={2} vitality={82} size={140} /></div>
+    <div className="disp" style={{ textAlign: "center", fontSize: 26, fontWeight: 700, color: "#fff" }}>Start fresh</div>
+    <div className="muted" style={{ textAlign: "center", fontSize: 13.5, marginBottom: 22, lineHeight: 1.5 }}>Signed in as {email}.<br />Set up a new companion to begin.</div>
+    <label className="lbl">Username</label><input className="txt" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="unique handle" />
+    <label className="lbl">Name your companion</label><input className="txt" value={pet} onChange={(e) => setPet(e.target.value)} placeholder="unique pet name" />
+    <label className="lbl">Choose a species</label>
+    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => (
+      <button key={k} onClick={() => setSpecies(k)} style={{ flex: 1, padding: "8px 2px 4px", borderRadius: 14, cursor: "pointer", background: species === k ? "#16241c" : "#181818", border: species === k ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Creature species={k} stage={2} vitality={80} size={48} /><span className="disp" style={{ color: "#e9ebef", fontSize: 10.5, fontWeight: 600 }}>{SPECIES[k].name}</span></button>))}</div>
+    {err && <div className="err">{err}</div>}
+    <button className="btn" disabled={busy} style={{ marginTop: 20, background: busy ? "#1c1c1c" : "#1DB954", color: busy ? "#6a6a6a" : "#08130d" }} onClick={submit}>{busy ? "Please wait…" : "Create companion"}</button>
+    <div style={{ textAlign: "center", marginTop: 16 }}><button className="link" onClick={onLogout}>Log out</button></div>
+  </div></div>;
+}
+
 /* ============================ HABITS (with duration) ============================ */
 function HabitsScreen({ habits, addHabit, removeHabit, locked }) {
   const [adding, setAdding] = useState(false), [name, setName] = useState(""), [icon, setIcon] = useState("Heart"), [color, setColor] = useState(HABIT_COLORS[0]), [dur, setDur] = useState(null);
@@ -850,7 +894,13 @@ const Legend = ({ c, t }) => <span style={{ display: "flex", alignItems: "center
 /* ============================ RANKS (global / friends / requests) ============================ */
 function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sent, onOpen, onRefresh, onAccept, onDecline, onCancel }) {
   const [sub, setSub] = useState("global");
+  const [gmode, setGmode] = useState("total");
+  const [gsp, setGsp] = useState("florn");
   useEffect(() => { if (onRefresh) onRefresh(); }, [sub]);
+  // total XP per user (sum of their pets)
+  const totals = Object.values(users).filter((u) => u.email !== DEV.email).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).sort((a, b) => b.total - a.total);
+  const bySpecies = list.filter((u) => u.species === gsp);
+  const speciesIds = ["florn", "nimbo", "cinder", "mica", "bonsai", "vesper"];
   return <div className="screen">
     <Header left={<><div className="eyebrow">Community</div><div className="h1" style={{ marginTop: 4 }}>Ranks</div></>} right={<div style={{ display: "flex", gap: 8 }}><button className="ghost" onClick={() => onRefresh && onRefresh()}><RefreshCw size={16} color="#8a8a8a" /></button><button className="avatarbtn" onClick={() => onOpen(me)}><Creature species={topPet(acct).species} stage={topPet(acct).stage} vitality={topPet(acct).vitality} size={30} skin={topPet(acct).skin} /></button></div>} />
     <div className="segwrap">
@@ -859,14 +909,35 @@ function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sen
     </div>
 
     {sub === "global" && <>
-      <div className="muted" style={{ fontSize: 13, margin: "4px 0 14px" }}>{list.length ? `All companions by total XP.${myRank ? ` Your active pet is #${myRank}.` : ""}` : "No companions yet."}</div>
-      {list.map((u, i) => { const mine = u.owner === me && u.id === activeId, m = i === 0 ? "#F5C36B" : i === 1 ? "#C9CDD6" : i === 2 ? "#D8956B" : null;
-        return <button key={u.owner + u.id} onClick={() => onOpen(u.owner)} className="card rowbtn" style={{ border: mine ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: mine ? "#141d1a" : "#181818" }}>
-          <div style={{ width: 26, textAlign: "center" }}>{m ? <Medal size={20} color={m} /> : <span className="disp" style={{ color: "#8a8a8a", fontWeight: 700, fontSize: 15 }}>{i + 1}</span>}</div>
-          <div className="petframe"><Creature species={u.species} stage={u.stage} vitality={u.vit} size={40} skin={u.skin} /></div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>{u.name}{(u.prestige || 0) > 0 && <span className="prestige">★{u.prestige}</span>}{u.owner === me && <span style={{ color: "#1DB954", fontSize: 12 }}> · yours</span>}</div><div className="muted" style={{ fontSize: 12 }}>@{u.owner} · {TIERS[u.stage]}</div></div>
-          <div style={{ textAlign: "right" }}><div className="disp" style={{ color: "#F5C36B", fontWeight: 700, fontSize: 15 }}>{u.totalXp}</div><div className="muted" style={{ fontSize: 10 }}>XP</div></div>
-        </button>; })}
+      <div className="segwrap" style={{ marginTop: 4 }}>
+        <button className={`seg ${gmode === "total" ? "on" : ""}`} onClick={() => setGmode("total")}>Total XP</button>
+        <button className={`seg ${gmode === "species" ? "on" : ""}`} onClick={() => setGmode("species")}>By species</button>
+      </div>
+
+      {gmode === "total" && <>
+        <div className="muted" style={{ fontSize: 12.5, margin: "4px 0 12px" }}>Trainers ranked by every pet's XP combined.</div>
+        {totals.map((u, i) => { const mine = u.owner === me, m = i === 0 ? "#F5C36B" : i === 1 ? "#C9CDD6" : i === 2 ? "#D8956B" : null;
+          return <button key={u.owner} onClick={() => onOpen(u.owner)} className="card rowbtn" style={{ border: mine ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: mine ? "#141d1a" : "#181818" }}>
+            <div style={{ width: 26, textAlign: "center" }}>{m ? <Medal size={20} color={m} /> : <span className="disp" style={{ color: "#8a8a8a", fontWeight: 700, fontSize: 15 }}>{i + 1}</span>}</div>
+            <div className="petframe"><Creature species={u.top.species} stage={u.top.stage} vitality={u.top.vitality} size={40} skin={u.top.skin} /></div>
+            <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>@{u.owner}{mine && <span style={{ color: "#1DB954", fontSize: 12 }}> · you</span>}</div><div className="muted" style={{ fontSize: 12 }}>{(users[u.owner].pets || []).length} pet{(users[u.owner].pets || []).length > 1 ? "s" : ""}</div></div>
+            <div style={{ textAlign: "right" }}><div className="disp" style={{ color: "#F5C36B", fontWeight: 700, fontSize: 15 }}>{u.total}</div><div className="muted" style={{ fontSize: 10 }}>total XP</div></div>
+          </button>; })}
+      </>}
+
+      {gmode === "species" && <>
+        <div style={{ display: "flex", gap: 7, overflowX: "auto", padding: "6px 0 12px" }}>{speciesIds.map((sp) => (
+          <button key={sp} onClick={() => setGsp(sp)} className="chip" style={{ flexShrink: 0, background: gsp === sp ? "#16241c" : "#181818", border: gsp === sp ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)" }}>{SPECIES[sp].name}</button>))}</div>
+        <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>Top {SPECIES[gsp].name} companions by XP.</div>
+        {!bySpecies.length && <div className="muted" style={{ fontSize: 13, textAlign: "center", padding: 20 }}>No {SPECIES[gsp].name} yet.</div>}
+        {bySpecies.map((u, i) => { const mine = u.owner === me && u.id === activeId, m = i === 0 ? "#F5C36B" : i === 1 ? "#C9CDD6" : i === 2 ? "#D8956B" : null;
+          return <button key={u.owner + u.id} onClick={() => onOpen(u.owner)} className="card rowbtn" style={{ border: mine ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: mine ? "#141d1a" : "#181818" }}>
+            <div style={{ width: 26, textAlign: "center" }}>{m ? <Medal size={20} color={m} /> : <span className="disp" style={{ color: "#8a8a8a", fontWeight: 700, fontSize: 15 }}>{i + 1}</span>}</div>
+            <div className="petframe"><Creature species={u.species} stage={u.stage} vitality={u.vit} size={40} skin={u.skin} /></div>
+            <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>{u.name}{(u.prestige || 0) > 0 && <span className="prestige">★{u.prestige}</span>}</div><div className="muted" style={{ fontSize: 12 }}>@{u.owner} · {TIERS[u.stage]}</div></div>
+            <div style={{ textAlign: "right" }}><div className="disp" style={{ color: "#F5C36B", fontWeight: 700, fontSize: 15 }}>{u.totalXp}</div><div className="muted" style={{ fontSize: 10 }}>XP</div></div>
+          </button>; })}
+      </>}
     </>}
 
     {sub === "friends" && <>
