@@ -228,7 +228,9 @@ export default function App() {
   const [burst, setBurst] = useState(false);
   const [wheelOpen, setWheelOpen] = useState(false);
   const [viewUser, setViewUser] = useState(null);
+  const [saveState, setSaveState] = useState("idle");
   const saveT = useRef(null);
+  const acctRef = useRef(null);
 
   const afterAuth = async (session) => {
     const uid = session.user.id, email = session.user.email;
@@ -250,10 +252,23 @@ export default function App() {
     const l = document.createElement("link"); l.rel = "stylesheet";
     l.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap";
     document.head.appendChild(l);
+    const flush = () => { if (acctRef.current && acctRef.current.id) { try { saveAccountRow(acctRef.current); } catch (e) {} } };
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flush);
+    return () => { document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", flush); };
   }, []);
 
   const acct = me ? users[me] : null;
-  const commit = (a) => { setUsers((u) => ({ ...u, [me]: a })); clearTimeout(saveT.current); saveT.current = setTimeout(() => saveAccountRow(a), 400); };
+  const persist = async (a) => {
+    setSaveState("saving");
+    try {
+      const res = await saveAccountRow(a);
+      if (res && res.error) { console.error("Companion save error:", res.error); setSaveState("error"); }
+      else setSaveState("saved");
+    } catch (e) { console.error("Companion save exception:", e); setSaveState("error"); }
+  };
+  const commit = (a) => { setUsers((u) => ({ ...u, [me]: a })); acctRef.current = a; persist(a); };
   const clone = () => JSON.parse(JSON.stringify(acct));
   const active = () => (acct.pets.find((p) => p.id === acct.activePet) || acct.pets[0]);
   const logout = async () => { await supabase.auth.signOut(); setMe(null); setIsDev(false); setUsers({}); setTab("today"); };
@@ -362,7 +377,7 @@ export default function App() {
   const sent = (acct.follows || []).filter((f) => users[f] && !(users[f].follows || []).includes(me));
 
   return (
-    <Shell tab={tab} setTab={setTab} flash={flash} onLogout={logout} reqCount={incoming.length}>
+    <Shell tab={tab} setTab={setTab} flash={flash} onLogout={logout} reqCount={incoming.length} saveState={saveState}>
       {tab === "today" && (
         <div className="screen">
           <Header left={<><div className="eyebrow">Hi @{me}</div><div className="h1" style={{ marginTop: 4 }}>Today</div></>} right={<StreakChip streak={acct.streak} atRisk={!completedToday} freezes={acct.freezes} />} />
@@ -404,10 +419,14 @@ export default function App() {
 }
 
 /* ============================ SHELL ============================ */
-function Shell({ tab, setTab, flash, onLogout, reqCount, children }) {
+function Shell({ tab, setTab, flash, onLogout, reqCount, saveState, children }) {
+  const dot = saveState === "error" ? "#F98A8A" : saveState === "saving" ? "#F5C36B" : "#1DB954";
   return <div className="wrap"><Style /><div className="phone">
     {flash && <div className="flash">{flash}</div>}
-    <div style={{ position: "absolute", top: 18, right: 18, zIndex: 20 }}><button className="ghost" onClick={onLogout}><LogOut size={16} color="#8a8a8a" /></button></div>
+    <div style={{ position: "absolute", top: 18, right: 18, zIndex: 20, display: "flex", alignItems: "center", gap: 8 }}>
+      {saveState !== "idle" && <span title={"save: " + saveState} style={{ width: 8, height: 8, borderRadius: "50%", background: dot, boxShadow: `0 0 8px ${dot}` }} />}
+      <button className="ghost" onClick={onLogout}><LogOut size={16} color="#8a8a8a" /></button>
+    </div>
     {children}
     <div className="tabbar">{[["today", Home, "Today"], ["habits", ListChecks, "Habits"], ["pet", Sparkles, "Companion"], ["calendar", CalendarDays, "Calendar"], ["ranks", Trophy, "Ranks"]].map(([id, Ic, l]) => (
       <button key={id} className={`tab ${tab === id ? "on" : ""}`} onClick={() => setTab(id)} style={{ position: "relative" }}><Ic size={21} strokeWidth={tab === id ? 2.4 : 2} />{l}{id === "ranks" && reqCount > 0 && <span className="badge">{reqCount}</span>}</button>))}</div>
