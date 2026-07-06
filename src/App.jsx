@@ -68,6 +68,10 @@ const FIRE_SPRITES = {
   nimbo: ["/pets/nimbo-fire-0.png", "/pets/nimbo-fire-1.png", "/pets/nimbo-fire-2.png", "/pets/nimbo-fire-3.png"],
   mica: ["/pets/mica-fire-0.png", "/pets/mica-fire-1.png", "/pets/mica-fire-2.png", "/pets/mica-fire-3.png"]
 };
+// Glasses ("specs" accessory) sprite variants — normal + fire, so it stacks with On Fire
+const SP = ["cinder", "mica", "nimbo", "florn", "vesper"];
+const GLASSES = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-glasses-${i}.png`)]));
+const GLASSES_FIRE = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-glassesfire-${i}.png`)]));
 
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
 const ACCESSORIES = [
@@ -269,8 +273,16 @@ const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, 
   const st = Math.max(0, Math.min(4, stage));
   const idx = formIdx(st);
   const onFire = pose === "fire";
-  const fireSrc = onFire && FIRE_SPRITES[species] ? FIRE_SPRITES[species][idx] : null;
-  const src = fireSrc || SPRITES[species][idx];
+  const hasSpecs = (accessories || []).includes("specs");
+  let src, firedArt = false;
+  if (onFire) {
+    if (hasSpecs && GLASSES_FIRE[species]) { src = GLASSES_FIRE[species][idx]; firedArt = true; }
+    else if (FIRE_SPRITES[species]) { src = FIRE_SPRITES[species][idx]; firedArt = true; }
+    else if (hasSpecs && GLASSES[species]) { src = GLASSES[species][idx]; }
+    else { src = SPRITES[species][idx]; }
+  } else {
+    src = (hasSpecs && GLASSES[species]) ? GLASSES[species][idx] : SPRITES[species][idx];
+  }
   const mf = mood === "sick" ? "grayscale(.5) brightness(.82) " : mood === "tired" ? "saturate(.72) " : "";
   const sk = skin === "shiny" ? "hue-rotate(135deg) saturate(1.12) " : skin === "gilded" ? "sepia(1) saturate(2.6) hue-rotate(-12deg) brightness(1.05) contrast(1.05) " : "";
   const filter = (mf + sk).trim() || "none";
@@ -278,7 +290,7 @@ const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, 
   return (
     <div style={{ position: "relative", width: size, height: size, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div className="c-bob" style={{ width: size, height: size, position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
-        {onFire && !fireSrc && <FlameOverlay />}
+        {onFire && !firedArt && <FlameOverlay />}
         <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain", position: "relative", zIndex: 1 }} />
       </div>
       {hasHalo && <HaloRing />}
