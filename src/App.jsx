@@ -892,7 +892,10 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
       {editing ? <><input className="txt" style={{ flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} autoFocus /><button className="chip" onClick={save}>Save</button></> : <><div className="h1">{pet.name}</div>{pBadge(pet)}<button className="ghost" onClick={() => { setName(pet.name); setEditing(true); }}><Pencil size={16} color="#8a8a8a" /></button></>}
     </div>
     {err && <div className="err" style={{ marginTop: 0 }}>{err}</div>}
-    <div style={{ display: "flex", justifyContent: "center" }}><Creature species={pet.species} stage={pet.stage} vitality={pet.vitality} size={196} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} shiny={(pet.prestige || 0) > 0 && !pet.skin} /></div>
+    <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
+      <div style={{ position: "absolute", width: 220, height: 220, top: -8, borderRadius: "50%", background: `radial-gradient(circle,rgba(${(HUE[pet.species] || [29,185,84]).join(",")},${pet.vitality >= 45 ? 0.12 : 0.06}) 0%,transparent 66%)`, pointerEvents: "none" }} />
+      <Creature species={pet.species} stage={pet.stage} vitality={pet.vitality} size={196} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} shiny={(pet.prestige || 0) > 0 && !pet.skin} />
+    </div>
     <div className="card" style={{ padding: 18, marginBottom: 14 }}>
       <Meter label="Vitality" value={`${pet.vitality}%`} pct={pet.vitality} color={pet.vitality >= 45 ? "#1DB954" : pet.vitality >= 25 ? "#F5C36B" : "#F98A8A"} />
       <div style={{ height: 14 }} />
