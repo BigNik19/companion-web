@@ -570,7 +570,7 @@ export default function App() {
     const msg = ms ? `🔥 ${a.streak}-day streak! +1 freeze` : lvl ? `${p.name} evolved into a ${TIERS[p.stage]}!` : sank ? `${p.name} got sick and reverted…` : pct >= 0.8 ? `Great day — ${p.name} is thriving.` : met ? "Day counted. Streak alive." : "Under goal — streak reset.";
     setFlash(msg + "  ·  🎁 spin ready"); if (ms || lvl || pct >= 0.8) { setBurst(true); setTimeout(() => setBurst(false), 1400); }
     setTab("today"); setTimeout(() => setFlash(null), 3000);
-    if (evolved) setTimeout(() => setEvolve({ species: p.species, stage: p.stage, name: p.name, shiny: (p.prestige || 0) > 0 && !p.skin }), 400);
+    if (evolved) setTimeout(() => setEvolve({ species: p.species, stage: p.stage, name: p.name, skin: p.skin }), 400);
   };
 
   const switchPet = (id) => { const a = clone(); a.activePet = id; commit(a); };
@@ -862,18 +862,25 @@ function ChatOverlay({ users, me, friends, chatWith, setChatWith, onClose, onSen
 }
 
 /* ============================ EVOLUTION REVEAL ============================ */
-function EvolveOverlay({ species, stage, name, shiny, onClose }) {
-  const [revealed, setRevealed] = useState(false);
+function EvolveOverlay({ species, stage, name, skin, onClose }) {
+  const [phase, setPhase] = useState("shroud"); // shroud -> flash -> revealed
+  const reveal = () => { setPhase("flash"); setTimeout(() => setPhase("revealed"), 450); };
+  const done = phase === "revealed";
   return (
-    <div className="evowrap" onClick={revealed ? onClose : undefined}>
+    <div className="evowrap" onClick={done ? onClose : undefined}>
+      {phase === "flash" && <div className="evoflash" />}
       <div className="evoinner" onClick={(e) => e.stopPropagation()}>
-        <div className="eyebrow" style={{ textAlign: "center", color: "#1DB954" }}>{revealed ? "Evolution complete" : "Your companion is evolving…"}</div>
-        <div className={"evocreature " + (revealed ? "evoshow" : "evohide")}>
-          <Creature species={species} stage={stage} vitality={92} size={200} shiny={shiny} />
+        <div className="eyebrow" style={{ textAlign: "center", color: "#F5C36B", letterSpacing: 2 }}>{done ? "EVOLUTION!" : "Something is stirring…"}</div>
+        <div className="evostage">
+          {done && <div className="evorays" />}
+          <div className={"evocreature " + (done ? "evoshow" : "evoshroud")}>
+            <Creature species={species} stage={stage} vitality={92} size={200} skin={skin} />
+          </div>
+          {!done && [0, 1, 2, 3, 4, 5, 6, 7].map((i) => <span key={i} className="evospark" style={{ transform: `rotate(${i * 45}deg) translateY(-92px)` }} />)}
         </div>
-        {!revealed
-          ? <button className="btn" style={{ background: "#1DB954", color: "#08130d" }} onClick={() => setRevealed(true)}>Reveal</button>
-          : <><div className="disp" style={{ color: "#fff", textAlign: "center", fontSize: 19, fontWeight: 700, margin: "2px 0 14px" }}>{name} became a {TIERS[stage]}!</div><button className="btn" style={{ background: "#242424", color: "#fff" }} onClick={onClose}>Continue</button></>}
+        {!done
+          ? <button className="btn evobtn" onClick={reveal}>Tap to reveal</button>
+          : <><div className="disp" style={{ color: "#fff", textAlign: "center", fontSize: 20, fontWeight: 800, margin: "2px 0 14px" }}>{name} is now a {TIERS[stage]}!</div><button className="btn" style={{ background: "#242424", color: "#fff" }} onClick={onClose}>Continue</button></>}
       </div>
     </div>
   );
@@ -977,6 +984,14 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
       <button key={p.id} onClick={() => switchPet(p.id)} className="card" style={{ minWidth: 92, padding: "10px 6px 8px", cursor: "pointer", border: p.id === pet.id ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", background: p.id === pet.id ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
         <Creature species={p.species} stage={p.stage} vitality={p.vitality} size={56} skin={p.skin} shiny={(p.prestige || 0) > 0 && !p.skin} /><span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{p.name} {pBadge(p)}</span><span className="muted" style={{ fontSize: 10 }}>{TIERS[p.stage]} · {p.totalXp}xp</span></button>))}</div>
     <div className="muted" style={{ fontSize: 11.5, marginBottom: 18 }}>Win rare pets from the daily spin. Each keeps its own XP, tier and style.</div>
+    <div className="eyebrow" style={{ marginBottom: 4 }}>Starter pets</div>
+    <div className="muted" style={{ fontSize: 11.5, marginBottom: 10 }}>Tap a starter to switch to it, or start a new one. Each is its own companion with its own XP.</div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 18 }}>{["cinder", "mica", "nimbo", "florn", "bonsai"].map((k) => { const owned = acct.pets.find((p) => p.species === k); const active = pet.species === k; return (
+      <button key={k} onClick={() => pickSpecies(k)} className="card" style={{ padding: "10px 6px 8px", cursor: "pointer", border: active ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", background: active ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Creature species={k} stage={owned ? owned.stage : 1} vitality={80} size={54} skin={owned ? owned.skin : null} />
+        <span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{SPECIES[k].name}</span>
+        <span className="muted" style={{ fontSize: 10 }}>{owned ? (active ? "active" : "switch") : "＋ new"}</span>
+      </button>); })}</div>
     <div className="eyebrow" style={{ marginBottom: 10 }}>Evolution journey</div>
     <div className="card" style={{ padding: "16px 6px", marginBottom: 16 }}><div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>{TIERS.map((t, i) => (
       <div key={t} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: i <= pet.stage ? 1 : 0.3 }}><Creature species={pet.species} stage={i} vitality={80} size={52} skin={pet.skin} shiny={(pet.prestige || 0) > 0 && !pet.skin} /><span className="disp" style={{ fontSize: 9, fontWeight: 600, color: i === pet.stage ? "#1DB954" : "#8a8a8a" }}>{t}</span></div>))}</div></div>
@@ -1277,9 +1292,19 @@ function Style() {
     .evowrap{position:absolute;inset:0;z-index:80;background:rgba(6,8,10,.94);display:flex;align-items:center;justify-content:center;animation:fadein .3s}
     @keyframes fadein{from{opacity:0}to{opacity:1}}
     .evoinner{width:82%;max-width:320px;text-align:center}
-    .evocreature{display:flex;justify-content:center;margin:16px 0 20px;min-height:200px;align-items:flex-end}
-    .evohide{filter:brightness(0) contrast(.2);opacity:.9;transform:scale(.92);transition:none}
-    .evoshow{animation:evopop .7s cubic-bezier(.2,.9,.3,1.35)}
-    @keyframes evopop{0%{filter:brightness(4);transform:scale(.55);opacity:0}55%{filter:brightness(1.5)}100%{filter:none;transform:scale(1);opacity:1}}
+    .evostage{position:relative;display:flex;align-items:flex-end;justify-content:center;min-height:210px;margin:14px 0 18px}
+    .evocreature{position:relative;z-index:2}
+    .evoshroud{filter:brightness(0);animation:shpulse 1.1s ease-in-out infinite}
+    @keyframes shpulse{0%,100%{transform:scale(.96);filter:brightness(0) drop-shadow(0 0 12px rgba(245,195,107,.55))}50%{transform:scale(1.03);filter:brightness(0) drop-shadow(0 0 24px rgba(245,195,107,1))}}
+    .evoshow{animation:evopop2 .8s cubic-bezier(.2,.9,.3,1.4)}
+    @keyframes evopop2{0%{filter:brightness(4);transform:scale(.5);opacity:0}50%{filter:brightness(1.6)}100%{filter:none;transform:scale(1);opacity:1}}
+    .evoflash{position:absolute;inset:0;background:#fff;z-index:90;pointer-events:none;animation:flashout .45s ease-out forwards}
+    @keyframes flashout{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
+    .evorays{position:absolute;width:280px;height:280px;border-radius:50%;z-index:1;pointer-events:none;background:conic-gradient(from 0deg,rgba(245,195,107,.32),transparent 30deg,rgba(245,195,107,.32) 60deg,transparent 90deg,rgba(245,195,107,.32) 120deg,transparent 150deg,rgba(245,195,107,.32) 180deg,transparent 210deg,rgba(245,195,107,.32) 240deg,transparent 270deg,rgba(245,195,107,.32) 300deg,transparent 330deg);animation:spin 9s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .evospark{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#F5C36B;box-shadow:0 0 8px #F5C36B;animation:sparkle 1.3s ease-in-out infinite}
+    @keyframes sparkle{0%,100%{opacity:.25}50%{opacity:1}}
+    .evobtn{background:linear-gradient(90deg,#F5C36B,#F7A8C0)!important;color:#2a1a0a!important;animation:btnglow 1.4s ease-in-out infinite}
+    @keyframes btnglow{0%,100%{box-shadow:0 0 0 rgba(245,195,107,0)}50%{box-shadow:0 0 22px rgba(245,195,107,.6)}}
   `}</style>;
 }
