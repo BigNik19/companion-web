@@ -81,6 +81,8 @@ const DEV = { email: "dev@companion.app", pass: "dev" };
 const OWNER_EMAIL = "nikolaithomas100@gmail.com";
 // Very low-key ambient glow colour per species
 const HUE = { florn: [70, 170, 80], cinder: [232, 66, 44], mica: [225, 234, 245], nimbo: [90, 150, 230], bonsai: [46, 140, 64], vesper: [164, 135, 255] };
+const SPECIES_ORDER = { cinder: 0, mica: 1, nimbo: 2, florn: 3, vesper: 4, bonsai: 5 };
+const speciesRank = (s) => (SPECIES_ORDER[s] != null ? SPECIES_ORDER[s] : 9);
 const prestigeMult = (p) => 1 + 0.5 * (p || 0); // xp gain multiplier per prestige level
 const hasPrestige = (a) => (a.pets || []).some((p) => (p.prestige || 0) > 0);
 const maxPrestige = (a) => (a.pets || []).reduce((m, p) => Math.max(m, p.prestige || 0), 0);
@@ -394,6 +396,7 @@ export default function App() {
         if (p.vitality == null) p.vitality = 50;
         if (p.xp == null) p.xp = 0;
         if (p.totalXp == null) p.totalXp = 0;
+        if (p.species === "bonsai" && p.name === "Bonsai") { p.name = "Classic"; changed = true; }
         const bst = p.stage || 0;
         while (p.stage < MAX_STAGE && p.xp >= tierXp(p.stage)) { p.xp -= tierXp(p.stage); p.stage++; }
         if (p.stage !== bst) changed = true;
@@ -922,7 +925,7 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
       </div>
     )}
     <div className="eyebrow" style={{ marginBottom: 10 }}>Your pets ({acct.pets.length})</div>
-    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{acct.pets.map((p) => (
+    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{[...acct.pets].sort((a, b) => speciesRank(a.species) - speciesRank(b.species)).map((p) => (
       <button key={p.id} onClick={() => switchPet(p.id)} className="card" style={{ minWidth: 92, padding: "10px 6px 8px", cursor: "pointer", border: p.id === pet.id ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", background: p.id === pet.id ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
         <Creature species={p.species} stage={p.stage} vitality={p.vitality} size={56} skin={p.skin} shiny={(p.prestige || 0) > 0 && !p.skin} /><span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{p.name} {pBadge(p)}</span><span className="muted" style={{ fontSize: 10 }}>{TIERS[p.stage]} · {p.totalXp}xp</span></button>))}</div>
     <div className="muted" style={{ fontSize: 11.5, marginBottom: 18 }}>Win rare pets from the daily spin. Each keeps its own XP, tier and style.</div>
