@@ -419,7 +419,7 @@ export default function App() {
   const refresh = async () => { const map = await loadAllAccounts(); setUsers(map); };
   const deleteUser = async (uname) => { const target = users[uname]; if (!target) return; try { await supabase.from("accounts").delete().eq("id", target.id); } catch (e) {} const map = await loadAllAccounts(); setUsers(map); };
   const maxOut = async (uname) => {
-    const target = users[uname]; if (!target) return;
+    const target = users[uname]; if (!target) return { ok: false, error: "not found" };
     const a = JSON.parse(JSON.stringify(target));
     a.tester = true;
     const allSp = ["cinder", "mica", "nimbo", "florn", "bonsai", "vesper"];
@@ -430,8 +430,11 @@ export default function App() {
     a.streak = 365; a.best = 365; a.freezes = FREEZE_CAP; a.spinTokens = (a.spinTokens || 0) + 50;
     a.ownedAcc = ACCESSORIES.map((x) => x.id);
     a.ownedSkins = {}; allSp.forEach((sp) => { a.ownedSkins[sp] = [...SKIN_IDS]; });
-    try { await saveAccountRow(a); } catch (e) {}
+    let err = null;
+    try { const res = await saveAccountRow(a); if (res && res.error) err = res.error.message || String(res.error); } catch (e) { err = (e && e.message) || String(e); }
+    if (err) return { ok: false, error: err };
     const map = await loadAllAccounts(); setUsers(map);
+    return { ok: true };
   };
 
   useEffect(() => {
@@ -1114,6 +1117,7 @@ function ProfileModal({ user, rel, onClose, onSend, onAccept, onDecline, onCance
 /* ============================ DEV ============================ */
 function DevDashboard({ users, onLogout, onDelete, onMax }) {
   const [q, setQ] = useState("");
+  const [msg, setMsg] = useState("");
   const list = Object.values(users).sort((a, b) => b.lastActive - a.lastActive).filter((u) => { const s = q.trim().toLowerCase(); if (!s) return true; return u.username.toLowerCase().includes(s) || u.email.toLowerCase().includes(s) || u.pets.some((p) => p.name.toLowerCase().includes(s)); });
   const totalPets = Object.values(users).reduce((s, u) => s + u.pets.length, 0);
   return <div className="wrap"><Style /><div className="phone" style={{ overflowY: "auto", padding: "24px 20px 30px" }}>
@@ -1121,12 +1125,13 @@ function DevDashboard({ users, onLogout, onDelete, onMax }) {
     <div className="h1" style={{ marginBottom: 14 }}>All users</div>
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#181818", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "11px 14px", marginBottom: 16 }}><Search size={17} color="#8a8a8a" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search username, email or pet…" style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: "Inter,sans-serif" }} />{q && <button onClick={() => setQ("")} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={15} color="#8a8a8a" /></button>}</div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 18 }}><Stat icon={<Users size={15} color="#1DB954" />} label="Users" value={Object.keys(users).length} /><Stat icon={<Sparkles size={15} color="#A9B4FF" />} label="Pets" value={totalPets} /><Stat icon={<Flame size={15} color="#F5C36B" />} label="Top streak" value={Object.values(users).reduce((m, u) => Math.max(m, u.best), 0)} /></div>
+    {msg && <div className="card" style={{ padding: 12, marginBottom: 12, textAlign: "center", fontSize: 13, color: msg[0] === "✗" ? "#F98A8A" : "#1DB954", border: msg[0] === "✗" ? "1px solid rgba(249,138,138,.4)" : "1px solid rgba(29,185,84,.4)" }}>{msg}</div>}
     {!Object.keys(users).length && <div className="card" style={{ padding: 24, textAlign: "center" }}><div className="muted" style={{ fontSize: 14 }}>No users have signed up yet.</div></div>}
     {list.map((u) => { const p = u.pets.find((x) => x.id === u.activePet) || u.pets[0]; return <div key={u.username} className="card" style={{ padding: 14, marginBottom: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}><div className="petframe" style={{ width: 48, height: 48 }}><Creature species={p.species} stage={p.stage} vitality={p.vitality} size={42} skin={p.skin} /></div><div style={{ flex: 1, minWidth: 0 }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>@{u.username}{u.tester && <span className="prestige" style={{ background: "#A9B4FF", color: "#0c1030" }}>TESTER</span>} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {u.pets.length} pet{u.pets.length > 1 ? "s" : ""} · {(u.follows || []).length} connections</span></div><div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div></div><div style={{ display: "flex", alignItems: "center", gap: 5 }}><span className="dot" style={{ background: Date.now() - u.lastActive < 86400000 ? "#1DB954" : "#5a5a5a" }} /><span className="muted" style={{ fontSize: 11 }}>{relTime(u.lastActive)}</span></div></div>
       <div style={{ display: "flex", gap: 12, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.06)", flexWrap: "wrap", alignItems: "center" }}><Kv k="Active pet" v={p.name} /><Kv k="Tier" v={TIERS[p.stage]} /><Kv k="XP" v={p.totalXp} /><Kv k="Streak" v={u.streak} /><Kv k="Best" v={u.best} /><Kv k="Vit" v={`${p.vitality}%`} />
         <button className="delbtn" onClick={() => { if (window.confirm(`Delete @${u.username}'s account and all their pets? This can't be undone.`)) onDelete(u.username); }}><Trash2 size={14} />Delete</button>
-        <button className="maxbtn" onClick={() => { if (window.confirm(`Max out @${u.username} for testing? It will be hidden from the leaderboard and friends.`)) onMax(u.username); }}><Sparkles size={14} />Max out</button></div>
+        <button className="maxbtn" onClick={async () => { setMsg("Maxing @" + u.username + "…"); const r = await onMax(u.username); setMsg(r && r.ok ? "✓ Maxed @" + u.username + " — hidden from leaderboard & friends" : "✗ Failed: " + ((r && r.error) || "unknown") + " (add the dev-update policy in Supabase)"); }}><Sparkles size={14} />Max out</button></div>
     </div>; })}
   </div></div>;
 }
