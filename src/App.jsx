@@ -519,7 +519,7 @@ export default function App() {
   };
 
   const leaderboard = [];
-  Object.values(users).filter((u) => u.email !== DEV.email).forEach((u) => (u.pets || []).forEach((p) => leaderboard.push({ ...p, owner: u.username, vit: p.vitality })));
+  Object.values(users).filter((u) => u.email !== DEV.email).forEach((u) => (u.pets || []).forEach((p) => { if ((p.totalXp || 0) > 0) leaderboard.push({ ...p, owner: u.username, vit: p.vitality }); }));
   leaderboard.sort((x, y) => y.totalXp - x.totalXp);
   const myRank = leaderboard.findIndex((x) => x.owner === me && x.id === pet.id) + 1;
 
@@ -871,14 +871,6 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
       <button onClick={() => setSkin(null)} className="chip" style={{ background: !pet.skin ? "#16241c" : "#181818", border: !pet.skin ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)" }}><Shirt size={14} color="#c8c8c8" />Default</button>
       {SKIN_IDS.map((s) => { const ok = ownedSkins.includes(s), on = pet.skin === s; return <button key={s} disabled={!ok} onClick={() => setSkin(s)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#16241c" : "#181818", border: on ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{!ok && <Lock size={13} color="#6a6a6a" />}{SKIN_NAME[s]}{!ok && <span className="muted" style={{ fontSize: 11 }}>spin</span>}</button>; })}</div>
-    <div className="eyebrow" style={{ marginBottom: 4 }}>Raise a species</div>
-    <div className="muted" style={{ fontSize: 11.5, marginBottom: 10 }}>Each species is its own companion with its own XP. Tap to switch to it, or start a new one.</div>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => { const owns = acct.pets.some((p) => p.species === k); const isActive = pet.species === k; return (
-      <button key={k} onClick={() => pickSpecies(k)} className="card" style={{ padding: "14px 10px 10px", cursor: "pointer", border: isActive ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: isActive ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
-        <Creature species={k} stage={owns ? (acct.pets.find((p) => p.species === k).stage) : 1} vitality={80} size={80} />
-        <span className="disp" style={{ color: "#fff", fontSize: 14, fontWeight: 600, marginTop: 2 }}>{SPECIES[k].name}</span>
-        <span className="muted" style={{ fontSize: 10.5 }}>{owns ? (isActive ? "active" : "tap to switch") : "＋ new"}</span>
-      </button>); })}</div>
   </div>;
 }
 
@@ -910,7 +902,7 @@ function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sen
   const [gsp, setGsp] = useState("florn");
   useEffect(() => { if (onRefresh) onRefresh(); }, [sub]);
   // total XP per user (sum of their pets)
-  const totals = Object.values(users).filter((u) => u.email !== DEV.email).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).sort((a, b) => b.total - a.total);
+  const totals = Object.values(users).filter((u) => u.email !== DEV.email).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).filter((u) => u.total > 0).sort((a, b) => b.total - a.total);
   const bySpecies = list.filter((u) => u.species === gsp);
   const speciesIds = ["florn", "nimbo", "cinder", "mica", "bonsai", "vesper"];
   return <div className="screen">
