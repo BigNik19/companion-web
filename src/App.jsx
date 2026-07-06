@@ -872,7 +872,6 @@ function EvolveOverlay({ species, stage, name, skin, onClose }) {
       <div className="evoinner" onClick={(e) => e.stopPropagation()}>
         <div className="eyebrow" style={{ textAlign: "center", color: "#F5C36B", letterSpacing: 2 }}>{done ? "EVOLUTION!" : "Something is stirring…"}</div>
         <div className="evostage">
-          {done && <div className="evorays" />}
           <div className={"evocreature " + (done ? "evoshow" : "evoshroud")}>
             <Creature species={species} stage={stage} vitality={92} size={200} skin={skin} />
           </div>
