@@ -477,6 +477,13 @@ export default function App() {
   const switchPet = (id) => { const a = clone(); a.activePet = id; commit(a); };
   const renamePet = (name) => { const n = name.trim(); if (!n) return "Enter a name."; if (n.toLowerCase() !== pet.name.toLowerCase() && allPetNames(users).has(n.toLowerCase())) return "That pet name is taken."; const a = clone(); a.pets.find((x) => x.id === pet.id).name = n; commit(a); return null; };
   const setSpecies = (sp) => { const a = clone(); const p = a.pets.find((x) => x.id === pet.id); p.species = sp; p.skin = null; commit(a); };
+  const pickSpecies = (sp) => {
+    const a = clone();
+    const existing = a.pets.find((p) => p.species === sp);
+    if (existing) { a.activePet = existing.id; }
+    else { const np = newPet(sp, uniquePetName(SPECIES[sp].name, allPetNames(users))); a.pets.push(np); a.activePet = np.id; }
+    commit(a);
+  };
   const toggleAcc = (id) => { const a = clone(); const p = a.pets.find((x) => x.id === pet.id); p.accessories = p.accessories.includes(id) ? p.accessories.filter((x) => x !== id) : [...p.accessories, id]; commit(a); };
   const setPose = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).pose = id; commit(a); };
   const setSkin = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).skin = id; commit(a); };
@@ -562,7 +569,7 @@ export default function App() {
         </div>
       )}
       {tab === "habits" && <HabitsScreen habits={habits} addHabit={addHabit} removeHabit={removeHabit} locked={completedToday} />}
-      {tab === "pet" && <PetScreen key={pet.id} acct={acct} pet={pet} switchPet={switchPet} renamePet={renamePet} setSpecies={setSpecies} toggleAcc={toggleAcc} setPose={setPose} setSkin={setSkin} prestigePet={prestigePet} />}
+      {tab === "pet" && <PetScreen key={pet.id} acct={acct} pet={pet} switchPet={switchPet} renamePet={renamePet} setSpecies={setSpecies} pickSpecies={pickSpecies} toggleAcc={toggleAcc} setPose={setPose} setSkin={setSkin} prestigePet={prestigePet} />}
       {tab === "calendar" && <CalendarScreen acct={acct} />}
       {tab === "ranks" && <Ranks users={users} me={me} acct={acct} list={leaderboard} activeId={pet.id} myRank={myRank} friends={friends} incoming={incoming} sent={sent} onOpen={(u) => setViewUser(u)} onRefresh={refresh} onAccept={follow} onDecline={hideReq} onCancel={unfollow} />}
       {wheelOpen && <WheelModal onClose={() => setWheelOpen(false)} roll={rollReward} grant={grant} />}
@@ -816,7 +823,7 @@ function HabitsScreen({ habits, addHabit, removeHabit, locked }) {
 }
 
 /* ============================ COMPANION ============================ */
-function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, toggleAcc, setPose, setSkin, prestigePet }) {
+function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, toggleAcc, setPose, setSkin, prestigePet }) {
   const [editing, setEditing] = useState(false), [name, setName] = useState(pet.name), [err, setErr] = useState("");
   const save = () => { const e = renamePet(name); if (e) setErr(e); else { setErr(""); setEditing(false); } };
   const ownedSkins = acct.ownedSkins[pet.species] || [];
@@ -864,9 +871,14 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, toggleAcc, set
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
       <button onClick={() => setSkin(null)} className="chip" style={{ background: !pet.skin ? "#16241c" : "#181818", border: !pet.skin ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)" }}><Shirt size={14} color="#c8c8c8" />Default</button>
       {SKIN_IDS.map((s) => { const ok = ownedSkins.includes(s), on = pet.skin === s; return <button key={s} disabled={!ok} onClick={() => setSkin(s)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#16241c" : "#181818", border: on ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{!ok && <Lock size={13} color="#6a6a6a" />}{SKIN_NAME[s]}{!ok && <span className="muted" style={{ fontSize: 11 }}>spin</span>}</button>; })}</div>
-    <div className="eyebrow" style={{ marginBottom: 10 }}>Species of this pet</div>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => (
-      <button key={k} onClick={() => setSpecies(k)} className="card" style={{ padding: "14px 10px 10px", cursor: "pointer", border: pet.species === k ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: pet.species === k ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center" }}><Creature species={k} stage={pet.stage} vitality={80} size={80} /><span className="disp" style={{ color: "#fff", fontSize: 14, fontWeight: 600, marginTop: 2 }}>{SPECIES[k].name}</span></button>))}</div>
+    <div className="eyebrow" style={{ marginBottom: 4 }}>Raise a species</div>
+    <div className="muted" style={{ fontSize: 11.5, marginBottom: 10 }}>Each species is its own companion with its own XP. Tap to switch to it, or start a new one.</div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => { const owns = acct.pets.some((p) => p.species === k); const isActive = pet.species === k; return (
+      <button key={k} onClick={() => pickSpecies(k)} className="card" style={{ padding: "14px 10px 10px", cursor: "pointer", border: isActive ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.05)", background: isActive ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+        <Creature species={k} stage={owns ? (acct.pets.find((p) => p.species === k).stage) : 1} vitality={80} size={80} />
+        <span className="disp" style={{ color: "#fff", fontSize: 14, fontWeight: 600, marginTop: 2 }}>{SPECIES[k].name}</span>
+        <span className="muted" style={{ fontSize: 10.5 }}>{owns ? (isActive ? "active" : "tap to switch") : "＋ new"}</span>
+      </button>); })}</div>
   </div>;
 }
 
