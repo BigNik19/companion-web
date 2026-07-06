@@ -66,7 +66,10 @@ const SPRITES = {
 };
 // "On fire" pose sprite variants (stack with skins via the shiny CSS filter)
 const FIRE_SPRITES = {
-  cinder: ["/pets/cinder-fire-0.png", "/pets/cinder-fire-1.png", "/pets/cinder-fire-2.png", "/pets/cinder-fire-3.png"]
+  cinder: ["/pets/cinder-fire-0.png", "/pets/cinder-fire-1.png", "/pets/cinder-fire-2.png", "/pets/cinder-fire-3.png"],
+  florn: ["/pets/florn-fire-0.png", "/pets/florn-fire-1.png", "/pets/florn-fire-2.png", "/pets/florn-fire-3.png"],
+  nimbo: ["/pets/nimbo-fire-0.png", "/pets/nimbo-fire-1.png", "/pets/nimbo-fire-2.png", "/pets/nimbo-fire-3.png"],
+  mica: ["/pets/mica-fire-0.png", "/pets/mica-fire-1.png", "/pets/mica-fire-2.png", "/pets/mica-fire-3.png"]
 };
 
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
@@ -305,7 +308,12 @@ function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, ski
   const st = Math.max(0, Math.min(4, stage));
   const mood = vitality >= 78 ? "radiant" : vitality >= 45 ? "content" : vitality >= 25 ? "tired" : "sick";
   if (SPRITES[species]) return <SpriteCreature species={species} stage={stage} shiny={skin === "shiny"} size={size} mood={mood} pose={pose} />;
-  if (SPECIES[species] && SPECIES[species].plant) return <PlantCreature P={P} st={st} mood={mood} size={size} pose={pose} accessories={accessories} />;
+  if (SPECIES[species] && SPECIES[species].plant) {
+    const PP = skin === "shiny" ? { ...P, main: "#E87FB0", light: "#F7B3D2", dark: "#B23C74", accent: "#F7C6DE" } : P;
+    const el = <PlantCreature P={PP} st={st} mood={mood} size={size} pose="idle" accessories={accessories} />;
+    if (pose === "fire") return <div style={{ position: "relative", display: "inline-flex", alignItems: "flex-end", justifyContent: "center" }}><FlameOverlay />{el}</div>;
+    return el;
+  }
   const sx = [0.6, 0.74, 0.88, 0.98, 1.06][st], sy = sx * [0.92, 0.97, 1, 1.07, 1.13][st];
   const floats = st === 4, feet = st >= 1 && st <= 3, arms = st >= 2, fierce = st >= 2;
   const body = "M0,-58 C40,-58 66,-32 66,2 C66,44 40,80 0,80 C-40,80 -66,44 -66,2 C-66,-32 -40,-58 0,-58 Z";
@@ -979,7 +987,7 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>{ACCESSORIES.map((a) => { const ok = accAvail(a), on = pet.accessories.includes(a.id); return <button key={a.id} disabled={!ok} onClick={() => toggleAcc(a.id)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#16241c" : "#181818", border: on ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{ok ? <Wand2 size={14} color={on ? "#1DB954" : "#c8c8c8"} /> : <Lock size={13} color="#6a6a6a" />}{a.name}{!ok && <span className="muted" style={{ fontSize: 11 }}>{a.wheel ? "spin" : a.streak ? `${a.streak}d streak` : `${a.xp}xp`}</span>}</button>; })}</div>
     <div className="eyebrow" style={{ marginBottom: 10 }}>Poses</div>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>{POSES.map((p) => { const ok = poseAvail(p), on = pet.pose === p.id; return <button key={p.id} disabled={!ok} onClick={() => setPose(p.id)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#16241c" : "#181818", border: on ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{!ok && <Lock size={13} color="#6a6a6a" />}{p.name}{!ok && <span className="muted" style={{ fontSize: 11 }}>{p.streak ? `${p.streak}d streak` : `${p.xp}xp`}</span>}</button>; })}</div>
-    {(() => { const list = SPRITES[pet.species] ? PRESTIGE_SKINS.filter((s) => s.id === "shiny") : PRESTIGE_SKINS.filter((s) => s.id !== "shiny"); return <>
+    {(() => { const list = PRESTIGE_SKINS.filter((s) => s.id === "shiny"); return <>
       <div className="eyebrow" style={{ marginBottom: 10 }}>Prestige skins</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>{list.map((s) => { const ok = (pet.prestige || 0) >= s.prestige, on = pet.skin === s.id; return <button key={s.id} disabled={!ok} onClick={() => setSkin(s.id)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#241620" : "#181818", border: on ? "1px solid #F7A8C0" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{ok ? <Sparkles size={13} color={on ? "#F7A8C0" : "#c8c8c8"} /> : <Lock size={13} color="#6a6a6a" />}{s.name}{!ok && <span className="muted" style={{ fontSize: 11 }}>{`★${s.prestige}`}</span>}</button>; })}</div>
     </>; })()}
