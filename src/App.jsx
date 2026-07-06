@@ -55,6 +55,16 @@ const PRESTIGE_SKIN_PAL = {
 };
 const ALL_SKIN_PAL = { ...SKIN_PAL, ...PRESTIGE_SKIN_PAL };
 const skinName = (id) => SKIN_NAME[id] || (PRESTIGE_SKINS.find((s) => s.id === id) || {}).name || id;
+// Cinder — original pixel-art fire-reptile line (egg → hatchling → juvenile → beast → mythic)
+const CINDER_SPRITES = [
+  ["....KKKK....","...KCYYCK...","..KCYYYYCK..","..KRRRRRRK..",".KRRRLLRRRK.",".KRRRRRRRRK.",".KRRRDDRRRK.",".KRRKKKKRRK.",".KRRRRRRRRK.",".KRRRLLRRRK.","..KRRRRRRK..","..KRRRRRRK..","...KKKKKK..."],
+  [".....CCC......","....CYCYC.....","...KKKKKKK....","..KRRRRRRRK...","..KRWEWRRRKK..","..KRRRRRRRRDK.","..KRRMMMRRRK..","..KBBBBBBBK...","..KBBBBBBK....","...KRRRRK.....","...KRRRRK.....","..KRK..KRK....","..KKK..KKK...."],
+  [".....CCCCC......","....CYCYCYC.....","...KKKKKKKKK....","..KRRRRRRRRRK...","..KRWEWRRRRRKK..","..KRRRRRRRRRRDK.","..KRRMMMMRRRRK..",".KKRRRRRRRRRK...","KDRBBBBBBBBK....","KDKBBBBBBBBK....",".KKBBBBBBBK.....","...KRRRRRRK.....","...KRRKKRRK.....","..KRRK..KRRK....","..KKK....KKK...."],
+  ["....CC....CC......","...CYYC..CYYC.....","...KKKK..KKKK.....","..KKRRKKKKRRKK....",".KRRRRRRRRRRRRK...",".KRWEWRRRRRRRRKK..",".KRRRRRRRRRRRRRDK.",".KRRMMMMMRRRRRRK..","KKRRRRRRRRRRRRK...","KDRRBBBBBBBBBRK...","KDKBBBBBBBBBBK....","KDKBBBBBBBBBBK....",".KKBBBBBBBBBK.....","..KRRRRRRRRK......","..KRRRKKRRRK......",".KRRRK..KRRRK.....",".KKKK....KKKK....."],
+  ["..CC..CC..CC......",".CYYCCYYCCYYC.....",".KKKKKKKKKKKK.....","..KKRRKKKKRRKK....",".KRRRRRRRRRRRRK...",".KRWEWRRRRRRRRKK..",".KRRRRRRRRRRRRRDK.",".KRRMMMMMRRRRRRK..","KKRRRRRRRRRRRRKD..","KDRRBBBBBBBBBRKD..","KDKBBBBBBBBBBKD...","KDKBBBBBBBBBBK....",".KKBBBBBBBBBK.....","..KRRRRRRRRK......","..KRRRKKRRRK......",".KRRRK..KRRRK.....",".KKKK....KKKK....."],
+];
+const CINDER_COLORS = { K: "#3A0A04", R: "#E23B2E", D: "#A31C10", L: "#FF7A55", B: "#F7D08A", C: "#FF9A3C", Y: "#FFD23F", W: "#FFFFFF", E: "#20120E", M: "#7A1508" };
+const CINDER_SHINY = { K: "#0A2A18", R: "#2FB56B", D: "#177A43", L: "#8FE6B0", B: "#EAF7C8", C: "#FFD23F", Y: "#FFF3B0", W: "#FFFFFF", E: "#0E201A", M: "#0E5A34" };
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
 const ACCESSORIES = [
   { id: "specs", name: "Specs", xp: 40 }, { id: "cap", name: "Cap", xp: 120 }, { id: "scarf", name: "Scarf", xp: 240 },
@@ -64,6 +74,8 @@ const ACCESSORIES = [
 const POSES = [{ id: "idle", name: "Idle", xp: 0 }, { id: "wave", name: "Wave", xp: 80 }, { id: "sit", name: "Sit", xp: 180 }, { id: "fire", name: "On Fire", streak: 7 }];
 const TIERS = ["Hatchling", "Youngling", "Adult", "Elder", "Mythic"];
 const XP_PER_TIER = 60, GOAL = 0.6, FREEZE_CAP = 2, MAX_STAGE = 4;
+const TIER_XP = [10, 60, 60, 60]; // xp needed to leave each stage — the egg hatches fast at 10
+const tierXp = (stage) => (TIER_XP[stage] != null ? TIER_XP[stage] : 60);
 const MILESTONES = [3, 7, 14, 30, 50, 100, 365];
 const DEV = { email: "dev@companion.app", pass: "dev" };
 const OWNER_EMAIL = "nikolaithomas100@gmail.com";
@@ -243,11 +255,28 @@ function PlantCreature({ P, st, mood, size = 220, pose = "idle", accessories = [
   );
 }
 
-function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, skin = null, accessories = [], pose = "idle" }) {
+/* Cinder — pixel sprite renderer with an idle bob and flickering flame crest */
+function CinderSprite({ stage = 1, shiny = false, size = 220, mood = "content" }) {
+  const st = Math.max(0, Math.min(4, stage));
+  const C = shiny ? CINDER_SHINY : CINDER_COLORS;
+  const rows = CINDER_SPRITES[st], w = rows[0].length, h = rows.length;
+  const body = [], crest = [];
+  for (let y = 0; y < h; y++) { const row = rows[y]; for (let x = 0; x < w; x++) { const ch = row[x]; const fill = C[ch]; if (!fill) continue; const r = <rect key={x + "_" + y} x={x} y={y} width={1.03} height={1.03} fill={fill} />; (ch === "C" || ch === "Y") ? crest.push(r) : body.push(r); } }
+  const filter = mood === "sick" ? "grayscale(.45) brightness(.82)" : mood === "tired" ? "saturate(.72)" : "none";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={size} height={size * h / w} shapeRendering="crispEdges" style={{ overflow: "visible", filter }} className="c-bob">
+      <g>{body}</g>
+      <g className="c-flick2">{crest}</g>
+    </svg>
+  );
+}
+
+function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, skin = null, accessories = [], pose = "idle", shiny = false }) {
   const uid = useMemo(() => "g" + Math.random().toString(36).slice(2), []);
   const P = paletteFor(species, skin);
   const st = Math.max(0, Math.min(4, stage));
   const mood = vitality >= 78 ? "radiant" : vitality >= 45 ? "content" : vitality >= 25 ? "tired" : "sick";
+  if (species === "cinder") return <CinderSprite stage={stage} shiny={shiny} size={size} mood={mood} />;
   if (SPECIES[species] && SPECIES[species].plant) return <PlantCreature P={P} st={st} mood={mood} size={size} pose={pose} accessories={accessories} />;
   const sx = [0.6, 0.74, 0.88, 0.98, 1.06][st], sy = sx * [0.92, 0.97, 1, 1.07, 1.13][st];
   const floats = st === 4, feet = st >= 1 && st <= 3, arms = st >= 2, fierce = st >= 2;
@@ -462,7 +491,7 @@ export default function App() {
     else if (met) { p.vitality = Math.min(100, p.vitality + 5); const g = Math.round(10 * mult); p.xp += g; p.totalXp += g; }
     else p.vitality = Math.max(0, p.vitality - 26);
     let lvl = false, sank = false;
-    while (p.xp >= XP_PER_TIER && p.vitality >= 40 && p.stage < 4) { p.stage++; p.xp -= XP_PER_TIER; lvl = true; }
+    while (p.stage < MAX_STAGE && p.xp >= tierXp(p.stage) && p.vitality >= 40) { p.xp -= tierXp(p.stage); p.stage++; lvl = true; }
     if (!met && p.vitality <= 26 && p.stage > 0) { p.stage--; sank = true; }
     const ms = met && MILESTONES.includes(a.streak);
     if (ms && a.freezes < FREEZE_CAP) a.freezes = Math.min(FREEZE_CAP, a.freezes + 1);
@@ -511,7 +540,7 @@ export default function App() {
   const grant = (reward) => {
     const a = clone(); a.spinTokens = Math.max(0, (a.spinTokens || 0) - 1);
     if (reward.type === "freeze") a.freezes = Math.min(FREEZE_CAP, a.freezes + 1);
-    else if (reward.type === "xp") { const p = a.pets.find((x) => x.id === pet.id); p.xp += reward.amount; p.totalXp += reward.amount; while (p.xp >= XP_PER_TIER && p.stage < 4) { p.stage++; p.xp -= XP_PER_TIER; } }
+    else if (reward.type === "xp") { const p = a.pets.find((x) => x.id === pet.id); p.xp += reward.amount; p.totalXp += reward.amount; while (p.stage < MAX_STAGE && p.xp >= tierXp(p.stage)) { p.xp -= tierXp(p.stage); p.stage++; } }
     else if (reward.type === "acc") { if (!a.ownedAcc.includes(reward.id)) a.ownedAcc.push(reward.id); }
     else if (reward.type === "skin") { a.ownedSkins[reward.species] = [...new Set([...(a.ownedSkins[reward.species] || []), reward.id])]; }
     else if (reward.type === "pet") { a.pets.push(newPet(reward.species, uniquePetName(SPECIES[reward.species].name, allPetNames(users)))); }
@@ -545,7 +574,7 @@ export default function App() {
           <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", margin: "6px 0" }}>
             <div style={{ position: "absolute", width: 300, height: 300, top: -6, borderRadius: "50%", background: `radial-gradient(circle,${ambient} 0%,transparent 68%)` }} />
             {burst && [...Array(16)].map((_, i) => { const an = (i / 16) * 6.28; return <div key={i} className="sp" style={{ width: 7, height: 7, top: 130, left: "50%", background: i % 2 ? "#F5C36B" : "#1DB954", "--tx": `${Math.cos(an) * 130}px`, "--ty": `${Math.sin(an) * 130}px` }} />; })}
-            <Creature species={pet.species} stage={pet.stage} vitality={displayVit} size={222} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} />
+            <Creature species={pet.species} stage={pet.stage} vitality={displayVit} size={222} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} shiny={(pet.prestige || 0) > 0 && !pet.skin} />
             <div className="disp muted" style={{ fontSize: 13, marginTop: -6 }}>{pet.name} · {TIERS[pet.stage]} · feeling {moodWord}</div>
           </div>
           <div className="card" style={{ padding: 18, display: "flex", alignItems: "center", gap: 18, margin: "10px 0 20px" }}>
@@ -837,11 +866,11 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
       {editing ? <><input className="txt" style={{ flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} autoFocus /><button className="chip" onClick={save}>Save</button></> : <><div className="h1">{pet.name}</div>{pBadge(pet)}<button className="ghost" onClick={() => { setName(pet.name); setEditing(true); }}><Pencil size={16} color="#8a8a8a" /></button></>}
     </div>
     {err && <div className="err" style={{ marginTop: 0 }}>{err}</div>}
-    <div style={{ display: "flex", justifyContent: "center" }}><Creature species={pet.species} stage={pet.stage} vitality={pet.vitality} size={196} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} /></div>
+    <div style={{ display: "flex", justifyContent: "center" }}><Creature species={pet.species} stage={pet.stage} vitality={pet.vitality} size={196} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} shiny={(pet.prestige || 0) > 0 && !pet.skin} /></div>
     <div className="card" style={{ padding: 18, marginBottom: 14 }}>
       <Meter label="Vitality" value={`${pet.vitality}%`} pct={pet.vitality} color={pet.vitality >= 45 ? "#1DB954" : pet.vitality >= 25 ? "#F5C36B" : "#F98A8A"} />
       <div style={{ height: 14 }} />
-      <Meter label={`Growth to ${TIERS[Math.min(4, pet.stage + 1)]}`} value={`${pet.xp}/${XP_PER_TIER} xp`} pct={(pet.xp / XP_PER_TIER) * 100} color="#A9B4FF" />
+      <Meter label={`Growth to ${TIERS[Math.min(4, pet.stage + 1)]}`} value={`${pet.xp}/${tierXp(pet.stage)} xp`} pct={(pet.xp / tierXp(pet.stage)) * 100} color="#A9B4FF" />
       <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>Total XP by {pet.name}: <b style={{ color: "#F5C36B" }}>{pet.totalXp}</b>{(pet.prestige || 0) > 0 && <> · Prestige <b style={{ color: "#F7A8C0" }}>★{pet.prestige}</b> · +{Math.round((prestigeMult(pet.prestige) - 1) * 100)}% XP</>}</div>
     </div>
     {pet.stage >= MAX_STAGE && (
@@ -854,11 +883,11 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
     <div className="eyebrow" style={{ marginBottom: 10 }}>Your pets ({acct.pets.length})</div>
     <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{acct.pets.map((p) => (
       <button key={p.id} onClick={() => switchPet(p.id)} className="card" style={{ minWidth: 92, padding: "10px 6px 8px", cursor: "pointer", border: p.id === pet.id ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", background: p.id === pet.id ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-        <Creature species={p.species} stage={p.stage} vitality={p.vitality} size={56} skin={p.skin} /><span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{p.name} {pBadge(p)}</span><span className="muted" style={{ fontSize: 10 }}>{TIERS[p.stage]} · {p.totalXp}xp</span></button>))}</div>
+        <Creature species={p.species} stage={p.stage} vitality={p.vitality} size={56} skin={p.skin} shiny={(p.prestige || 0) > 0 && !p.skin} /><span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{p.name} {pBadge(p)}</span><span className="muted" style={{ fontSize: 10 }}>{TIERS[p.stage]} · {p.totalXp}xp</span></button>))}</div>
     <div className="muted" style={{ fontSize: 11.5, marginBottom: 18 }}>Win rare pets from the daily spin. Each keeps its own XP, tier and style.</div>
     <div className="eyebrow" style={{ marginBottom: 10 }}>Evolution journey</div>
     <div className="card" style={{ padding: "16px 6px", marginBottom: 16 }}><div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>{TIERS.map((t, i) => (
-      <div key={t} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: i <= pet.stage ? 1 : 0.3 }}><Creature species={pet.species} stage={i} vitality={80} size={52} skin={pet.skin} /><span className="disp" style={{ fontSize: 9, fontWeight: 600, color: i === pet.stage ? "#1DB954" : "#8a8a8a" }}>{t}</span></div>))}</div></div>
+      <div key={t} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: i <= pet.stage ? 1 : 0.3 }}><Creature species={pet.species} stage={i} vitality={80} size={52} skin={pet.skin} shiny={(pet.prestige || 0) > 0 && !pet.skin} /><span className="disp" style={{ fontSize: 9, fontWeight: 600, color: i === pet.stage ? "#1DB954" : "#8a8a8a" }}>{t}</span></div>))}</div></div>
     <div className="eyebrow" style={{ marginBottom: 10 }}>Accessories</div>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>{ACCESSORIES.map((a) => { const ok = accAvail(a), on = pet.accessories.includes(a.id); return <button key={a.id} disabled={!ok} onClick={() => toggleAcc(a.id)} className="chip" style={{ opacity: ok ? 1 : 0.5, background: on ? "#16241c" : "#181818", border: on ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: ok ? "pointer" : "default" }}>{ok ? <Wand2 size={14} color={on ? "#1DB954" : "#c8c8c8"} /> : <Lock size={13} color="#6a6a6a" />}{a.name}{!ok && <span className="muted" style={{ fontSize: 11 }}>{a.wheel ? "spin" : a.streak ? `${a.streak}d streak` : `${a.xp}xp`}</span>}</button>; })}</div>
     <div className="eyebrow" style={{ marginBottom: 10 }}>Poses</div>
@@ -1143,5 +1172,9 @@ function Style() {
     .delbtn:hover{background:rgba(249,138,138,.22)}
     .c-flick{animation:flick .5s ease-in-out infinite alternate;transform-origin:center bottom}
     @keyframes flick{0%{transform:scaleY(1) scaleX(1)}100%{transform:scaleY(1.12) scaleX(.94)}}
+    .c-bob{animation:pbob 2.6s ease-in-out infinite;transform-origin:center bottom}
+    @keyframes pbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5%)}}
+    .c-flick2{animation:pflick .42s ease-in-out infinite alternate;transform-origin:center top}
+    @keyframes pflick{0%{opacity:.78;transform:translateY(0) scaleY(.94)}100%{opacity:1;transform:translateY(-.2px) scaleY(1.06)}}
   `}</style>;
 }
