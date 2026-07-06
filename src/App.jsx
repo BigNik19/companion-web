@@ -96,11 +96,26 @@ function newAccountData(email, species, petName) {
     streak: 0, best: 0, freezes: 0, history: {}, lastCompletedDate: null,
     spinTokens: 0, ownedAcc: [], ownedSkins: {}, pets: [pet], activePet: pet.id,
     follows: [], hidden: [], profile: { bio: "", accent: "#1DB954" },
+    outbox: [], seen: {},
     createdAt: Date.now(),
   };
 }
 const paletteFor = (species, skin) => { const base = SPECIES[species].pal; return skin && SKIN_PAL[skin] ? { ...base, ...SKIN_PAL[skin] } : base; };
 const topPet = (u) => u.pets.reduce((a, b) => (b.totalXp > a.totalXp ? b : a), u.pets[0]);
+
+// Chat cleanup: drop messages 24h after the recipient has seen them, and a 7-day hard cap.
+function pruneOutbox(acc, map) {
+  if (!acc.outbox || !acc.outbox.length) return false;
+  const now = Date.now(), before = acc.outbox.length;
+  acc.outbox = acc.outbox.filter((m) => {
+    if (now - m.sentAt > 7 * 86400000) return false;
+    const recip = map[m.to];
+    const seenAt = recip && recip.seen && recip.seen[m.id];
+    if (seenAt && now - seenAt > 24 * 3600000) return false;
+    return true;
+  });
+  return acc.outbox.length !== before;
+}
 
 /* ====================== CREATURE (cell-shaded, Digimon-styled) ====================== */
 function accessoryDraw(id, P) {
@@ -228,6 +243,9 @@ export default function App() {
   const [burst, setBurst] = useState(false);
   const [wheelOpen, setWheelOpen] = useState(false);
   const [viewUser, setViewUser] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatWith, setChatWith] = useState(null);
+  const [chatConfirm, setChatConfirm] = useState(false);
   const [saveState, setSaveState] = useState("idle");
   const saveT = useRef(null);
   const acctRef = useRef(null);
@@ -235,14 +253,29 @@ export default function App() {
   const afterAuth = async (session) => {
     const uid = session.user.id, email = session.user.email;
     const map = await loadAllAccounts();
-    setUsers(map);
-    if (email === DEV.email) { setIsDev(true); setMe(null); setLoaded(true); return; }
+    if (email === DEV.email) { setUsers(map); setIsDev(true); setMe(null); setLoaded(true); return; }
     const uname = Object.keys(map).find((k) => map[k].id === uid);
+    if (uname) {
+      const acc = map[uname];
+      let changed = false;
+      if (acc.lastCompletedDate !== todayKey() && (acc.habits || []).some((h) => h.done)) {
+        acc.habits = acc.habits.map((h) => ({ ...h, done: false })); changed = true;
+      }
+      if (pruneOutbox(acc, map)) changed = true;
+      if (changed) { map[uname] = acc; saveAccountRow(acc); }
+    }
+    setUsers(map);
     setMe(uname || null);
     setLoaded(true);
   };
   const onAuthed = async () => { const { data: { session } } = await supabase.auth.getSession(); if (session) await afterAuth(session); };
   const refresh = async () => { const map = await loadAllAccounts(); setUsers(map); };
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    const t = setInterval(() => { refresh(); }, 4000);
+    return () => clearInterval(t);
+  }, [chatOpen]);
 
   useEffect(() => {
     (async () => {
@@ -296,7 +329,13 @@ export default function App() {
   const plannedMin = habits.reduce((s, h) => s + (h.duration || 0), 0);
 
   const toggle = (id) => { if (completedToday) return; const a = clone(); a.habits = a.habits.map((h) => h.id === id ? { ...h, done: !h.done } : h); commit(a); };
-  const addHabit = (name, icon, color, duration) => { const a = clone(); a.habits = [...a.habits, { id: Date.now(), name: name.trim(), icon, color, duration, done: false }]; commit(a); };
+  const addHabit = (name, icon, color, duration) => {
+    if (name.trim().toLowerCase() === "chat") { setChatConfirm(true); return; }
+    const a = clone(); a.habits = [...a.habits, { id: Date.now(), name: name.trim(), icon, color, duration, done: false }]; commit(a);
+  };
+  const sendMessage = (to, text) => { const t = text.trim(); if (!t) return; const a = clone(); a.outbox = a.outbox || []; a.outbox.push({ id: "m" + Date.now() + Math.random().toString(36).slice(2, 6), to, text: t, sentAt: Date.now() }); commit(a); };
+  const markSeen = (from) => { const a = clone(); a.seen = a.seen || {}; let changed = false; (users[from] && users[from].outbox || []).forEach((m) => { if (m.to === me && !a.seen[m.id]) { a.seen[m.id] = Date.now(); changed = true; } }); if (changed) commit(a); };
+  const openChat = () => { setChatConfirm(false); setChatWith(null); setChatOpen(true); };
   const removeHabit = (id) => { const a = clone(); a.habits = a.habits.filter((h) => h.id !== id); commit(a); };
 
   const completeDay = () => {
@@ -315,7 +354,7 @@ export default function App() {
     const ms = met && MILESTONES.includes(a.streak);
     if (ms && a.freezes < FREEZE_CAP) a.freezes = Math.min(FREEZE_CAP, a.freezes + 1);
     a.lastCompletedDate = today; a.history[today] = +pct.toFixed(2);
-    a.habits = a.habits.map((h) => ({ ...h, done: false })); a.spinTokens = (a.spinTokens || 0) + 1;
+    a.spinTokens = (a.spinTokens || 0) + 1;
     commit(a);
     const msg = ms ? `🔥 ${a.streak}-day streak! +1 freeze` : lvl ? `${p.name} evolved into a ${TIERS[p.stage]}!` : sank ? `${p.name} got sick and reverted…` : pct >= 0.8 ? `Great day — ${p.name} is thriving.` : met ? "Day counted. Streak alive." : "Under goal — streak reset.";
     setFlash(msg + "  ·  🎁 spin ready"); if (ms || lvl || pct >= 0.8) { setBurst(true); setTimeout(() => setBurst(false), 1400); }
@@ -414,6 +453,18 @@ export default function App() {
       {tab === "ranks" && <Ranks users={users} me={me} acct={acct} list={leaderboard} activeId={pet.id} myRank={myRank} friends={friends} incoming={incoming} sent={sent} onOpen={(u) => setViewUser(u)} onRefresh={refresh} onAccept={follow} onDecline={hideReq} onCancel={unfollow} />}
       {wheelOpen && <WheelModal onClose={() => setWheelOpen(false)} roll={rollReward} grant={grant} />}
       {viewUser && users[viewUser] && <ProfileModal user={users[viewUser]} rel={rel(viewUser)} onClose={() => setViewUser(null)} onSend={() => follow(viewUser)} onAccept={() => follow(viewUser)} onDecline={() => hideReq(viewUser)} onCancel={() => unfollow(viewUser)} onRemove={() => unfollow(viewUser)} onSave={saveProfile} />}
+      {chatConfirm && (
+        <div className="sheetwrap" onClick={() => setChatConfirm(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()} style={{ paddingBottom: 30 }}>
+            <div className="grab" />
+            <div className="disp" style={{ color: "#fff", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Open the chat room?</div>
+            <div className="muted" style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 18 }}>This will take you to the chat section. You can come back to your habits any time — your messages stay saved.</div>
+            <button className="btn" style={{ background: "#1DB954", color: "#08130d" }} onClick={openChat}>Enter chat</button>
+            <button className="btn" style={{ background: "#242424", color: "#c8c8c8", marginTop: 10 }} onClick={() => setChatConfirm(false)}>Not now</button>
+          </div>
+        </div>
+      )}
+      {chatOpen && <ChatOverlay users={users} me={me} friends={friends} chatWith={chatWith} setChatWith={(u) => { setChatWith(u); if (u) markSeen(u); }} onClose={() => setChatOpen(false)} onSend={sendMessage} />}
     </Shell>
   );
 }
@@ -491,6 +542,100 @@ function Auth({ onAuthed }) {
   </div></div>;
 }
 
+/* ============================ DURATION WHEEL ============================ */
+function DurationWheel({ value, onChange }) {
+  const opts = [0, 5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
+  const ITEM = 64;
+  const ref = useRef(null);
+  const [idx, setIdx] = useState(Math.max(0, opts.indexOf(value || 0)));
+  useEffect(() => { if (ref.current) ref.current.scrollLeft = idx * ITEM; }, []);
+  const onScroll = () => {
+    if (!ref.current) return;
+    const i = Math.max(0, Math.min(opts.length - 1, Math.round(ref.current.scrollLeft / ITEM)));
+    if (i !== idx) { setIdx(i); onChange(opts[i] || null); }
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", left: "50%", top: 2, bottom: 2, width: ITEM, transform: "translateX(-50%)", border: "1px solid rgba(29,185,84,.55)", borderRadius: 14, pointerEvents: "none", background: "rgba(29,185,84,.08)" }} />
+      <div ref={ref} onScroll={onScroll} className="wheelscroll" style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", padding: `10px calc(50% - ${ITEM / 2}px)`, WebkitOverflowScrolling: "touch" }}>
+        {opts.map((o, i) => (
+          <div key={o} style={{ minWidth: ITEM, scrollSnapAlign: "center", textAlign: "center", padding: "14px 0", fontFamily: "'Space Grotesk',sans-serif", fontSize: i === idx ? 22 : 16, fontWeight: i === idx ? 700 : 500, color: i === idx ? "#fff" : "#5a5a5a", transition: "font-size .15s,color .15s" }}>
+            {o === 0 ? "—" : o}
+          </div>
+        ))}
+      </div>
+      <div className="muted" style={{ textAlign: "center", fontSize: 12.5, marginTop: 2 }}>{opts[idx] === 0 ? "No time limit — slide to set minutes" : `${opts[idx]} minutes`}</div>
+    </div>
+  );
+}
+
+/* ============================ CHAT (secret) ============================ */
+function ChatOverlay({ users, me, friends, chatWith, setChatWith, onClose, onSend }) {
+  const [draft, setDraft] = useState("");
+  const endRef = useRef(null);
+  useEffect(() => { if (endRef.current) endRef.current.scrollIntoView(); }, [chatWith, users]);
+
+  const convo = (() => {
+    if (!chatWith) return [];
+    const msgs = [];
+    ((users[me] && users[me].outbox) || []).forEach((m) => { if (m.to === chatWith) msgs.push({ ...m, from: me }); });
+    ((users[chatWith] && users[chatWith].outbox) || []).forEach((m) => { if (m.to === me) msgs.push({ ...m, from: chatWith }); });
+    return msgs.sort((a, b) => a.sentAt - b.sentAt);
+  })();
+  const lastMsg = (u) => {
+    const all = [];
+    ((users[me] && users[me].outbox) || []).forEach((m) => { if (m.to === u) all.push(m); });
+    ((users[u] && users[u].outbox) || []).forEach((m) => { if (m.to === me) all.push(m); });
+    all.sort((a, b) => b.sentAt - a.sentAt);
+    return all[0];
+  };
+  const time = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const send = () => { if (draft.trim()) { onSend(chatWith, draft); setDraft(""); } };
+
+  return (
+    <div className="chatwrap">
+      {!chatWith ? (
+        <>
+          <div className="chathead">
+            <div><div className="disp" style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>Chats</div><div className="muted" style={{ fontSize: 12 }}>Messages vanish 24h after they're read</div></div>
+            <button className="ghost" onClick={onClose}><X size={18} color="#c8c8c8" /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px 14px" }}>
+            {!friends.length && <div className="card" style={{ padding: 26, textAlign: "center", marginTop: 10 }}><div className="muted" style={{ fontSize: 13.5 }}>Add friends in Ranks first — then you can message them here.</div></div>}
+            {friends.map((f) => { const lm = lastMsg(f.username); return (
+              <button key={f.username} className="chatrow" onClick={() => setChatWith(f.username)}>
+                <div className="petframe" style={{ width: 44, height: 44 }}><Creature species={topPet(f).species} stage={topPet(f).stage} vitality={70} size={38} skin={topPet(f).skin} /></div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>@{f.username}</div>
+                  <div className="muted" style={{ fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lm ? (lm.to === f.username ? "You: " : "") + lm.text : "Say hi"}</div>
+                </div>
+                {lm && <span className="muted" style={{ fontSize: 10 }}>{time(lm.sentAt)}</span>}
+              </button>); })}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="chathead">
+            <button className="ghost" onClick={() => setChatWith(null)}><ChevronLeft size={20} color="#c8c8c8" /></button>
+            <div style={{ flex: 1 }}><div className="disp" style={{ color: "#fff", fontSize: 16, fontWeight: 700 }}>@{chatWith}</div></div>
+            <button className="ghost" onClick={onClose}><X size={18} color="#c8c8c8" /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+            {!convo.length && <div className="muted" style={{ textAlign: "center", fontSize: 13, marginTop: 20 }}>No messages yet. Messages disappear 24h after they're read.</div>}
+            {convo.map((m) => { const mine = m.from === me; return (
+              <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>{m.text}<span className="btime">{time(m.sentAt)}</span></div>); })}
+            <div ref={endRef} />
+          </div>
+          <div className="chatinput">
+            <input className="txt" style={{ flex: 1, marginBottom: 0 }} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message" />
+            <button className="sendbtn" onClick={send}><Sparkles size={18} color="#08130d" /></button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ============================ HABITS (with duration) ============================ */
 function HabitsScreen({ habits, addHabit, removeHabit, locked }) {
   const [adding, setAdding] = useState(false), [name, setName] = useState(""), [icon, setIcon] = useState("Heart"), [color, setColor] = useState(HABIT_COLORS[0]), [dur, setDur] = useState(null);
@@ -507,7 +652,7 @@ function HabitsScreen({ habits, addHabit, removeHabit, locked }) {
       <div className="eyebrow" style={{ margin: "16px 0 10px" }}>Colour</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>{HABIT_COLORS.map((c) => <button key={c} onClick={() => setColor(c)} style={{ width: 30, height: 30, borderRadius: "50%", background: c, cursor: "pointer", border: color === c ? "2px solid #fff" : "2px solid transparent" }} />)}</div>
       <div className="eyebrow" style={{ margin: "16px 0 10px" }}>Duration</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{DURATIONS.map((d) => <button key={String(d)} onClick={() => setDur(d)} className="chip" style={{ background: dur === d ? "#16241c" : "#181818", border: dur === d ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)" }}>{d ? `${d} min` : "No limit"}</button>)}</div>
+      <DurationWheel value={dur} onChange={setDur} />
       <button className="btn" style={{ background: "#1DB954", color: "#08130d", marginTop: 18 }} onClick={submit}>Add habit</button>
     </div>}
     {!adding && <div style={{ height: 16 }} />}
@@ -776,5 +921,17 @@ function Style() {
     @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
     .grab{width:38px;height:4px;border-radius:2px;background:#3a3a3a;margin:0 auto 16px}
     .reward{text-align:center;background:#101c14;border:1px solid rgba(29,185,84,.3);border-radius:14px;padding:14px;margin-top:6px;animation:drop .3s}
+    .wheelscroll{scrollbar-width:none;-ms-overflow-style:none}
+    .wheelscroll::-webkit-scrollbar{display:none}
+    .chatwrap{position:absolute;inset:0;z-index:70;background:#0a0a0a;display:flex;flex-direction:column;animation:up .3s cubic-bezier(.2,.8,.2,1)}
+    .chathead{display:flex;align-items:center;gap:12px;padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.06);background:#121212}
+    .chatrow{width:100%;display:flex;align-items:center;gap:12px;padding:12px 10px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;font-family:inherit}
+    .chatrow:active{background:#151515}
+    .bubble{max-width:76%;padding:9px 13px;border-radius:16px;font-size:14px;line-height:1.35;position:relative;color:#fff;word-wrap:break-word}
+    .bubble.mine{align-self:flex-end;background:#1DB954;color:#08130d;border-bottom-right-radius:5px}
+    .bubble.theirs{align-self:flex-start;background:#232323;border-bottom-left-radius:5px}
+    .btime{display:block;font-size:9px;opacity:.6;text-align:right;margin-top:2px}
+    .chatinput{display:flex;align-items:center;gap:8px;padding:12px 14px 20px;border-top:1px solid rgba(255,255,255,.06);background:#121212}
+    .sendbtn{width:44px;height:44px;flex-shrink:0;border-radius:50%;border:none;background:#1DB954;display:flex;align-items:center;justify-content:center;cursor:pointer}
   `}</style>;
 }
