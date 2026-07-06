@@ -470,7 +470,7 @@ export default function App() {
   const displayVit = completedToday ? pet.vitality : previewVit;
   const moodWord = displayVit >= 78 ? "radiant" : displayVit >= 45 ? "content" : displayVit >= 25 ? "sleepy" : "unwell";
   const hb = HUE[pet.species] || [29, 185, 84];
-  const ambient = displayVit >= 25 ? `rgba(${hb[0]},${hb[1]},${hb[2]},${displayVit >= 78 ? 0.13 : 0.09})` : "rgba(120,130,140,.07)";
+  const ambient = displayVit >= 25 ? `rgba(${hb[0]},${hb[1]},${hb[2]},${displayVit >= 78 ? 0.32 : 0.22})` : "rgba(120,130,140,.12)";
   const ringColor = displayVit >= 45 ? "#1DB954" : displayVit >= 25 ? "#F5C36B" : "#F98A8A";
   const plannedMin = habits.reduce((s, h) => s + (h.duration || 0), 0);
 
@@ -893,7 +893,7 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
     </div>
     {err && <div className="err" style={{ marginTop: 0 }}>{err}</div>}
     <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
-      <div style={{ position: "absolute", width: 220, height: 220, top: -8, borderRadius: "50%", background: `radial-gradient(circle,rgba(${(HUE[pet.species] || [29,185,84]).join(",")},${pet.vitality >= 45 ? 0.12 : 0.06}) 0%,transparent 66%)`, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: 270, height: 270, top: -24, borderRadius: "50%", background: `radial-gradient(circle,rgba(${(HUE[pet.species] || [29,185,84]).join(",")},${pet.vitality >= 45 ? 0.34 : 0.16}) 0%,transparent 62%)`, pointerEvents: "none" }} />
       <Creature species={pet.species} stage={pet.stage} vitality={pet.vitality} size={196} skin={pet.skin} accessories={pet.accessories} pose={pet.pose} shiny={(pet.prestige || 0) > 0 && !pet.skin} />
     </div>
     <div className="card" style={{ padding: 18, marginBottom: 14 }}>
@@ -1123,6 +1123,7 @@ function WheelModal({ onClose, roll, grant }) {
 function Style() {
   return <style>{`
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{touch-action:manipulation}
     .wrap{min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#000;font-family:'Inter',system-ui,sans-serif;padding:16px}
     .phone{position:relative;width:100%;max-width:412px;height:min(880px,94vh);background:#0a0a0a;border-radius:40px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.7),inset 0 0 0 1px rgba(255,255,255,.05)}
     .screen{position:absolute;inset:0;bottom:76px;overflow-y:auto;padding:22px 20px 30px}
@@ -1167,7 +1168,7 @@ function Style() {
     @keyframes wave{0%,100%{transform:rotate(6deg)}50%{transform:rotate(-14deg)}}
     .sp{position:absolute;border-radius:50%;pointer-events:none;animation:fly 1.2s ease-out forwards}
     @keyframes fly{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0)}}
-    input.txt{width:100%;background:#101010;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:#fff;font-size:15px;font-family:'Inter',sans-serif;outline:none;margin-bottom:2px}
+    input.txt{width:100%;background:#101010;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;color:#fff;font-size:16px;font-family:'Inter',sans-serif;outline:none;margin-bottom:2px}
     input.txt:focus{border-color:rgba(29,185,84,.6)}
     .lbl{display:block;font-size:12px;color:#9a9a9a;font-weight:500;margin:14px 0 6px}
     .chip{padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.09);background:#181818;color:#d0d0d0;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .18s}
