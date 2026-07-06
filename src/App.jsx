@@ -257,7 +257,7 @@ function PlantCreature({ P, st, mood, size = 220, pose = "idle", accessories = [
 }
 
 /* Sprite creatures (cinder/mica/nimbo/florn) — egg + 3 forms, idle bob, CSS shiny */
-function SpriteCreature({ species, stage = 1, shiny = false, size = 220, mood = "content" }) {
+const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, shiny = false, size = 220, mood = "content" }) {
   const st = Math.max(0, Math.min(4, stage));
   const idx = formIdx(st);
   const src = SPRITES[species][idx];
@@ -266,10 +266,10 @@ function SpriteCreature({ species, stage = 1, shiny = false, size = 220, mood = 
   const filter = (mf + sh).trim() || "none";
   return (
     <div className="c-bob" style={{ width: size, height: size, display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
-      <img src={src} alt="" draggable={false} style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain" }} />
+      <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain" }} />
     </div>
   );
-}
+});
 
 function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, skin = null, accessories = [], pose = "idle", shiny = false }) {
   const uid = useMemo(() => "g" + Math.random().toString(36).slice(2), []);
