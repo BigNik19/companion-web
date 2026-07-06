@@ -127,7 +127,7 @@ function saveAccountRow(a) {
 const emailValid = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim());
 const allPetNames = (users) => { const s = new Set(); Object.values(users).forEach((u) => (u.pets || []).forEach((p) => s.add(p.name.toLowerCase()))); return s; };
 const uniquePetName = (base, taken) => { let n = base, i = 2; while (taken.has(n.toLowerCase())) n = `${base} ${i++}`; return n; };
-function newPet(species, name) { return { id: "p" + Date.now() + Math.floor(Math.random() * 9999), species, name, stage: 0, xp: 0, totalXp: 0, prestige: 0, vitality: 50, skin: null, accessories: [], pose: "idle" }; }
+function newPet(species, name) { return { id: "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), species, name, stage: 0, xp: 0, totalXp: 0, prestige: 0, vitality: 50, skin: null, accessories: [], pose: "idle" }; }
 function newAccountData(email, species, petName) {
   const pet = newPet(species, petName);
   return {
@@ -353,6 +353,10 @@ export default function App() {
     if (uname) {
       const acc = map[uname];
       let changed = false;
+      // repair any duplicate pet ids (which would make switching show the wrong pet's XP)
+      const seenIds = new Set();
+      (acc.pets || []).forEach((p) => { if (seenIds.has(p.id)) { p.id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); changed = true; } seenIds.add(p.id); });
+      if (changed && !(acc.pets || []).some((p) => p.id === acc.activePet)) acc.activePet = acc.pets[0].id;
       if (acc.lastCompletedDate !== todayKey() && (acc.habits || []).some((h) => h.done)) {
         acc.habits = acc.habits.map((h) => ({ ...h, done: false })); changed = true;
       }
@@ -365,6 +369,7 @@ export default function App() {
   };
   const onAuthed = async () => { const { data: { session } } = await supabase.auth.getSession(); if (session) await afterAuth(session); };
   const refresh = async () => { const map = await loadAllAccounts(); setUsers(map); };
+  const deleteUser = async (uname) => { const target = users[uname]; if (!target) return; try { await supabase.from("accounts").delete().eq("id", target.id); } catch (e) {} const map = await loadAllAccounts(); setUsers(map); };
 
   useEffect(() => {
     if (!chatOpen) return;
@@ -464,7 +469,6 @@ export default function App() {
   const setPose = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).pose = id; commit(a); };
   const setSkin = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).skin = id; commit(a); };
   const prestigePet = () => { const a = clone(); const p = a.pets.find((x) => x.id === pet.id); if (p.stage < MAX_STAGE) return; p.prestige = (p.prestige || 0) + 1; p.stage = 0; p.xp = 0; if (p.skin && PRESTIGE_SKINS.some((s) => s.id === p.skin && s.prestige > p.prestige)) p.skin = null; commit(a); setFlash(`${p.name} prestiged to ★${p.prestige}! XP now flows faster.`); setBurst(true); setTimeout(() => setBurst(false), 1400); setTimeout(() => setFlash(null), 3000); };
-  const deleteUser = async (uname) => { const target = users[uname]; if (!target) return; try { await supabase.from("accounts").delete().eq("id", target.id); } catch (e) {} const map = await loadAllAccounts(); setUsers(map); };
 
   const rollReward = () => {
     const owned = new Set(acct.ownedAcc);
@@ -546,7 +550,7 @@ export default function App() {
         </div>
       )}
       {tab === "habits" && <HabitsScreen habits={habits} addHabit={addHabit} removeHabit={removeHabit} locked={completedToday} />}
-      {tab === "pet" && <PetScreen acct={acct} pet={pet} switchPet={switchPet} renamePet={renamePet} setSpecies={setSpecies} toggleAcc={toggleAcc} setPose={setPose} setSkin={setSkin} prestigePet={prestigePet} />}
+      {tab === "pet" && <PetScreen key={pet.id} acct={acct} pet={pet} switchPet={switchPet} renamePet={renamePet} setSpecies={setSpecies} toggleAcc={toggleAcc} setPose={setPose} setSkin={setSkin} prestigePet={prestigePet} />}
       {tab === "calendar" && <CalendarScreen acct={acct} />}
       {tab === "ranks" && <Ranks users={users} me={me} acct={acct} list={leaderboard} activeId={pet.id} myRank={myRank} friends={friends} incoming={incoming} sent={sent} onOpen={(u) => setViewUser(u)} onRefresh={refresh} onAccept={follow} onDecline={hideReq} onCancel={unfollow} />}
       {wheelOpen && <WheelModal onClose={() => setWheelOpen(false)} roll={rollReward} grant={grant} />}
@@ -643,29 +647,25 @@ function Auth({ onAuthed }) {
 /* ============================ DURATION WHEEL ============================ */
 function DurationWheel({ value, onChange }) {
   const opts = [0, 5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
-  const ITEM = 64;
+  const ITEM = 62;
   const ref = useRef(null);
   const snapT = useRef(null);
   const [idx, setIdx] = useState(Math.max(0, opts.indexOf(value || 0)));
   useEffect(() => { if (ref.current) ref.current.scrollLeft = idx * ITEM; }, []);
+  const settle = (i) => { const j = Math.max(0, Math.min(opts.length - 1, i)); if (ref.current) ref.current.scrollTo({ left: j * ITEM, behavior: "smooth" }); setIdx(j); onChange(opts[j] || null); };
   const onScroll = () => {
     if (!ref.current) return;
-    const raw = ref.current.scrollLeft / ITEM;
-    const i = Math.max(0, Math.min(opts.length - 1, Math.round(raw)));
-    if (i !== idx) { setIdx(i); onChange(opts[i] || null); }
+    const i = Math.max(0, Math.min(opts.length - 1, Math.round(ref.current.scrollLeft / ITEM)));
+    if (i !== idx) setIdx(i);                    // move highlight live, but don't commit yet
     clearTimeout(snapT.current);
-    snapT.current = setTimeout(() => {
-      const j = Math.max(0, Math.min(opts.length - 1, Math.round(ref.current.scrollLeft / ITEM)));
-      ref.current.scrollTo({ left: j * ITEM, behavior: "smooth" });
-      setIdx(j); onChange(opts[j] || null);
-    }, 130);
+    snapT.current = setTimeout(() => settle(Math.round(ref.current.scrollLeft / ITEM)), 180); // snap + commit only after turning stops
   };
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", left: "50%", top: 2, bottom: 2, width: ITEM, transform: "translateX(-50%)", border: "1px solid rgba(29,185,84,.55)", borderRadius: 14, pointerEvents: "none", background: "rgba(29,185,84,.08)" }} />
-      <div ref={ref} onScroll={onScroll} className="wheelscroll" style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", padding: `10px calc(50% - ${ITEM / 2}px)`, WebkitOverflowScrolling: "touch" }}>
+      <div style={{ position: "absolute", left: "50%", top: 8, bottom: 24, width: 44, transform: "translateX(-50%)", border: "1.5px solid rgba(29,185,84,.65)", borderRadius: 12, pointerEvents: "none", background: "rgba(29,185,84,.1)" }} />
+      <div ref={ref} onScroll={onScroll} className="wheelscroll" style={{ display: "flex", overflowX: "auto", padding: `10px calc(50% - ${ITEM / 2}px)`, WebkitOverflowScrolling: "touch" }}>
         {opts.map((o, i) => (
-          <div key={o} onClick={() => { if (ref.current) ref.current.scrollTo({ left: i * ITEM, behavior: "smooth" }); setIdx(i); onChange(o || null); }} style={{ minWidth: ITEM, scrollSnapAlign: "center", scrollSnapStop: "always", textAlign: "center", padding: "14px 0", cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif", fontSize: i === idx ? 22 : 16, fontWeight: i === idx ? 700 : 500, color: i === idx ? "#fff" : "#5a5a5a", transition: "font-size .15s,color .15s" }}>
+          <div key={o} onClick={() => settle(i)} style={{ minWidth: ITEM, textAlign: "center", padding: "14px 0", cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif", fontSize: i === idx ? 22 : 15, fontWeight: i === idx ? 700 : 500, color: i === idx ? "#fff" : "#5a5a5a", transition: "font-size .15s,color .15s" }}>
             {o === 0 ? "—" : o}
           </div>
         ))}
