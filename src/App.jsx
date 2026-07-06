@@ -265,7 +265,7 @@ function PlantCreature({ P, st, mood, size = 220, pose = "idle", accessories = [
 }
 
 /* Sprite creatures (cinder/mica/nimbo/florn) — egg + 3 forms, idle bob, CSS shiny */
-const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, skin = null, size = 220, mood = "content", pose = "idle" }) {
+const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, skin = null, size = 220, mood = "content", pose = "idle", accessories = [] }) {
   const st = Math.max(0, Math.min(4, stage));
   const idx = formIdx(st);
   const onFire = pose === "fire";
@@ -274,13 +274,29 @@ const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, 
   const mf = mood === "sick" ? "grayscale(.5) brightness(.82) " : mood === "tired" ? "saturate(.72) " : "";
   const sk = skin === "shiny" ? "hue-rotate(135deg) saturate(1.12) " : skin === "gilded" ? "sepia(1) saturate(2.6) hue-rotate(-12deg) brightness(1.05) contrast(1.05) " : "";
   const filter = (mf + sk).trim() || "none";
+  const hasHalo = (accessories || []).includes("halo");
   return (
-    <div className="c-bob" style={{ width: size, height: size, position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
-      {onFire && !fireSrc && <FlameOverlay />}
-      <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain", position: "relative", zIndex: 1 }} />
+    <div style={{ position: "relative", width: size, height: size, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div className="c-bob" style={{ width: size, height: size, position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
+        {onFire && !fireSrc && <FlameOverlay />}
+        <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain", position: "relative", zIndex: 1 }} />
+      </div>
+      {hasHalo && <HaloRing />}
     </div>
   );
 });
+
+function HaloRing() {
+  return (
+    <div className="haloring" aria-hidden>
+      <svg viewBox="0 0 100 42" width="42%" style={{ overflow: "visible" }}>
+        <ellipse cx="50" cy="24" rx="34" ry="11" fill="none" stroke="#8a6a12" strokeWidth="10" />
+        <ellipse cx="50" cy="21" rx="34" ry="11" fill="none" stroke="#F5C36B" strokeWidth="7" />
+        <ellipse cx="50" cy="18" rx="34" ry="11" fill="none" stroke="#FFEBA6" strokeWidth="3" />
+      </svg>
+    </div>
+  );
+}
 
 function FlameOverlay() {
   return (
@@ -304,7 +320,7 @@ function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, ski
   const P = paletteFor(species, skin);
   const st = Math.max(0, Math.min(4, stage));
   const mood = vitality >= 78 ? "radiant" : vitality >= 45 ? "content" : vitality >= 25 ? "tired" : "sick";
-  if (SPRITES[species]) return <SpriteCreature species={species} stage={stage} skin={skin} size={size} mood={mood} pose={pose} />;
+  if (SPRITES[species]) return <SpriteCreature species={species} stage={stage} skin={skin} size={size} mood={mood} pose={pose} accessories={accessories} />;
   if (SPECIES[species] && SPECIES[species].plant) {
     const PP = skin === "shiny" ? { ...P, main: "#E87FB0", light: "#F7B3D2", dark: "#B23C74", accent: "#F7C6DE" } : skin === "gilded" ? { ...P, main: "#E8C24A", light: "#F7E08A", dark: "#A6801E", accent: "#FFF0B0" } : P;
     const el = <PlantCreature P={PP} st={st} mood={mood} size={size} pose="idle" accessories={accessories} />;
@@ -1305,5 +1321,7 @@ function Style() {
     @keyframes sparkle{0%,100%{opacity:.25}50%{opacity:1}}
     .evobtn{background:linear-gradient(90deg,#F5C36B,#F7A8C0)!important;color:#2a1a0a!important;animation:btnglow 1.4s ease-in-out infinite}
     @keyframes btnglow{0%,100%{box-shadow:0 0 0 rgba(245,195,107,0)}50%{box-shadow:0 0 22px rgba(245,195,107,.6)}}
+    .haloring{position:absolute;top:1%;left:0;right:0;display:flex;justify-content:center;z-index:4;pointer-events:none;filter:drop-shadow(0 0 5px rgba(245,195,107,.7));animation:halofloat 2.8s ease-in-out infinite}
+    @keyframes halofloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}
   `}</style>;
 }
