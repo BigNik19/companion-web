@@ -64,6 +64,10 @@ const SPRITES = {
   florn: ["/pets/florn-0.png", "/pets/florn-1.png", "/pets/florn-2.png", "/pets/florn-3.png"],
   vesper: ["/pets/vesper-0.png", "/pets/vesper-1.png", "/pets/vesper-2.png", "/pets/vesper-3.png"]
 };
+// "On fire" pose sprite variants (stack with skins via the shiny CSS filter)
+const FIRE_SPRITES = {
+  cinder: ["/pets/cinder-fire-0.png", "/pets/cinder-fire-1.png", "/pets/cinder-fire-2.png", "/pets/cinder-fire-3.png"]
+};
 
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
 const ACCESSORIES = [
@@ -261,26 +265,46 @@ function PlantCreature({ P, st, mood, size = 220, pose = "idle", accessories = [
 }
 
 /* Sprite creatures (cinder/mica/nimbo/florn) — egg + 3 forms, idle bob, CSS shiny */
-const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, shiny = false, size = 220, mood = "content" }) {
+const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, shiny = false, size = 220, mood = "content", pose = "idle" }) {
   const st = Math.max(0, Math.min(4, stage));
   const idx = formIdx(st);
-  const src = SPRITES[species][idx];
+  const onFire = pose === "fire";
+  const fireSrc = onFire && FIRE_SPRITES[species] ? FIRE_SPRITES[species][idx] : null;
+  const src = fireSrc || SPRITES[species][idx];
   const mf = mood === "sick" ? "grayscale(.5) brightness(.82) " : mood === "tired" ? "saturate(.72) " : "";
   const sh = shiny ? "hue-rotate(135deg) saturate(1.12) " : "";
   const filter = (mf + sh).trim() || "none";
   return (
-    <div className="c-bob" style={{ width: size, height: size, display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
-      <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain" }} />
+    <div className="c-bob" style={{ width: size, height: size, position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "center", filter }}>
+      {onFire && !fireSrc && <FlameOverlay />}
+      <img src={src} alt="" draggable={false} loading="lazy" decoding="async" style={{ maxWidth: "87%", maxHeight: "87%", objectFit: "contain", position: "relative", zIndex: 1 }} />
     </div>
   );
 });
+
+function FlameOverlay() {
+  return (
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 0 }}>
+      <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ overflow: "visible" }}>
+        <g className="c-flick" style={{ transformOrigin: "50% 100%" }}>
+          {[[26, 96], [50, 100], [74, 96], [38, 99], [62, 99]].map(([fx, fy], i) => (
+            <g key={i}>
+              <path d={`M${fx},${fy} C${fx - 6},${fy - 15} ${fx + 4},${fy - 19} ${fx},${fy - 32} C${fx + 8},${fy - 19} ${fx + 8},${fy - 8} ${fx},${fy} Z`} fill="#FF7A1A" opacity="0.9" />
+              <path d={`M${fx},${fy - 4} C${fx - 3},${fy - 12} ${fx + 2},${fy - 16} ${fx},${fy - 25} C${fx + 4},${fy - 16} ${fx + 4},${fy - 7} ${fx},${fy - 4} Z`} fill="#FFD23F" />
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
 
 function Creature({ species = "florn", stage = 1, vitality = 70, size = 220, skin = null, accessories = [], pose = "idle", shiny = false }) {
   const uid = useMemo(() => "g" + Math.random().toString(36).slice(2), []);
   const P = paletteFor(species, skin);
   const st = Math.max(0, Math.min(4, stage));
   const mood = vitality >= 78 ? "radiant" : vitality >= 45 ? "content" : vitality >= 25 ? "tired" : "sick";
-  if (SPRITES[species]) return <SpriteCreature species={species} stage={stage} shiny={skin === "shiny"} size={size} mood={mood} />;
+  if (SPRITES[species]) return <SpriteCreature species={species} stage={stage} shiny={skin === "shiny"} size={size} mood={mood} pose={pose} />;
   if (SPECIES[species] && SPECIES[species].plant) return <PlantCreature P={P} st={st} mood={mood} size={size} pose={pose} accessories={accessories} />;
   const sx = [0.6, 0.74, 0.88, 0.98, 1.06][st], sy = sx * [0.92, 0.97, 1, 1.07, 1.13][st];
   const floats = st === 4, feet = st >= 1 && st <= 3, arms = st >= 2, fierce = st >= 2;
