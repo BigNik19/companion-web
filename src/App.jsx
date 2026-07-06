@@ -433,7 +433,18 @@ export default function App() {
     const onHide = () => { if (document.visibilityState === "hidden") flush(); };
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", flush);
-    return () => { document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", flush); };
+    const noGesture = (e) => e.preventDefault();
+    document.addEventListener("gesturestart", noGesture);
+    document.addEventListener("gesturechange", noGesture);
+    document.addEventListener("gestureend", noGesture);
+    let lastTap = 0;
+    const noDoubleTap = (e) => { const now = Date.now(); if (now - lastTap <= 300) e.preventDefault(); lastTap = now; };
+    document.addEventListener("touchend", noDoubleTap, { passive: false });
+    return () => {
+      document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", flush);
+      document.removeEventListener("gesturestart", noGesture); document.removeEventListener("gesturechange", noGesture); document.removeEventListener("gestureend", noGesture);
+      document.removeEventListener("touchend", noDoubleTap);
+    };
   }, []);
 
   const acct = me ? users[me] : null;
