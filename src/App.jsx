@@ -418,6 +418,21 @@ export default function App() {
   const onAuthed = async () => { const { data: { session } } = await supabase.auth.getSession(); if (session) await afterAuth(session); };
   const refresh = async () => { const map = await loadAllAccounts(); setUsers(map); };
   const deleteUser = async (uname) => { const target = users[uname]; if (!target) return; try { await supabase.from("accounts").delete().eq("id", target.id); } catch (e) {} const map = await loadAllAccounts(); setUsers(map); };
+  const maxOut = async (uname) => {
+    const target = users[uname]; if (!target) return;
+    const a = JSON.parse(JSON.stringify(target));
+    a.tester = true;
+    const allSp = ["cinder", "mica", "nimbo", "florn", "bonsai", "vesper"];
+    const have = new Set((a.pets || []).map((p) => p.species));
+    allSp.forEach((sp) => { if (!have.has(sp)) a.pets.push(newPet(sp, SPECIES[sp].name)); });
+    a.pets = a.pets.map((p) => ({ ...p, stage: MAX_STAGE, xp: 0, totalXp: 9999, prestige: Math.max(p.prestige || 0, 5), vitality: 100 }));
+    a.activePet = a.pets[0].id;
+    a.streak = 365; a.best = 365; a.freezes = FREEZE_CAP; a.spinTokens = (a.spinTokens || 0) + 50;
+    a.ownedAcc = ACCESSORIES.map((x) => x.id);
+    a.ownedSkins = {}; allSp.forEach((sp) => { a.ownedSkins[sp] = [...SKIN_IDS]; });
+    try { await saveAccountRow(a); } catch (e) {}
+    const map = await loadAllAccounts(); setUsers(map);
+  };
 
   useEffect(() => {
     if (!chatOpen) return;
@@ -472,7 +487,7 @@ export default function App() {
   const saveProfile = (patch) => { const a = clone(); a.profile = { ...(a.profile || {}), ...patch }; commit(a); };
 
   if (!loaded) return <Splash />;
-  if (isDev) return <DevDashboard users={users} onLogout={logout} onDelete={deleteUser} />;
+  if (isDev) return <DevDashboard users={users} onLogout={logout} onDelete={deleteUser} onMax={maxOut} />;
   if (pendingProfile) return <ProfileSetup uid={pendingProfile.uid} email={pendingProfile.email} users={users} onDone={onAuthed} onLogout={logout} />;
   if (!me || !acct) return <Auth onAuthed={onAuthed} />;
 
@@ -570,7 +585,7 @@ export default function App() {
   };
 
   const leaderboard = [];
-  Object.values(users).filter((u) => u.email !== DEV.email).forEach((u) => (u.pets || []).forEach((p) => { if ((p.totalXp || 0) > 0) leaderboard.push({ ...p, owner: u.username, vit: p.vitality }); }));
+  Object.values(users).filter((u) => u.email !== DEV.email && !u.tester).forEach((u) => (u.pets || []).forEach((p) => { if ((p.totalXp || 0) > 0) leaderboard.push({ ...p, owner: u.username, vit: p.vitality }); }));
   leaderboard.sort((x, y) => y.totalXp - x.totalXp);
   const myRank = leaderboard.findIndex((x) => x.owner === me && x.id === pet.id) + 1;
 
@@ -583,9 +598,9 @@ export default function App() {
     if (theyFollow && !(acct.hidden || []).includes(uname)) return "in";
     return "none";
   };
-  const friends = (acct.follows || []).filter((f) => users[f] && (users[f].follows || []).includes(me)).map((f) => users[f]);
-  const incoming = Object.keys(users).filter((u) => u !== me && (users[u].follows || []).includes(me) && !(acct.follows || []).includes(u) && !(acct.hidden || []).includes(u));
-  const sent = (acct.follows || []).filter((f) => users[f] && !(users[f].follows || []).includes(me));
+  const friends = (acct.follows || []).filter((f) => users[f] && !users[f].tester && (users[f].follows || []).includes(me)).map((f) => users[f]);
+  const incoming = Object.keys(users).filter((u) => u !== me && !users[u].tester && (users[u].follows || []).includes(me) && !(acct.follows || []).includes(u) && !(acct.hidden || []).includes(u));
+  const sent = (acct.follows || []).filter((f) => users[f] && !users[f].tester && !(users[f].follows || []).includes(me));
 
   return (
     <Shell tab={tab} setTab={setTab} flash={flash} onLogout={logout} reqCount={incoming.length} saveState={saveState}>
@@ -925,7 +940,7 @@ function PetScreen({ acct, pet, switchPet, renamePet, setSpecies, pickSpecies, t
       </div>
     )}
     <div className="eyebrow" style={{ marginBottom: 10 }}>Your pets ({acct.pets.length})</div>
-    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{[...acct.pets].sort((a, b) => speciesRank(a.species) - speciesRank(b.species)).map((p) => (
+    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>{[...acct.pets].sort((a, b) => (a.id === pet.id ? -1 : b.id === pet.id ? 1 : speciesRank(a.species) - speciesRank(b.species))).map((p) => (
       <button key={p.id} onClick={() => switchPet(p.id)} className="card" style={{ minWidth: 92, padding: "10px 6px 8px", cursor: "pointer", border: p.id === pet.id ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", background: p.id === pet.id ? "#16241c" : "#181818", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
         <Creature species={p.species} stage={p.stage} vitality={p.vitality} size={56} skin={p.skin} shiny={(p.prestige || 0) > 0 && !p.skin} /><span className="disp" style={{ color: "#fff", fontSize: 12, fontWeight: 600, marginTop: 2 }}>{p.name} {pBadge(p)}</span><span className="muted" style={{ fontSize: 10 }}>{TIERS[p.stage]} · {p.totalXp}xp</span></button>))}</div>
     <div className="muted" style={{ fontSize: 11.5, marginBottom: 18 }}>Win rare pets from the daily spin. Each keeps its own XP, tier and style.</div>
@@ -975,7 +990,7 @@ function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sen
   const [gsp, setGsp] = useState("florn");
   useEffect(() => { if (onRefresh) onRefresh(); }, [sub]);
   // total XP per user (sum of their pets)
-  const totals = Object.values(users).filter((u) => u.email !== DEV.email).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).filter((u) => u.total > 0).sort((a, b) => b.total - a.total);
+  const totals = Object.values(users).filter((u) => u.email !== DEV.email && !u.tester).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).filter((u) => u.total > 0).sort((a, b) => b.total - a.total);
   const bySpecies = list.filter((u) => u.species === gsp);
   const hasVesper = (acct.pets || []).some((p) => p.species === "vesper");
   const speciesIds = hasVesper
@@ -1097,7 +1112,7 @@ function ProfileModal({ user, rel, onClose, onSend, onAccept, onDecline, onCance
 }
 
 /* ============================ DEV ============================ */
-function DevDashboard({ users, onLogout, onDelete }) {
+function DevDashboard({ users, onLogout, onDelete, onMax }) {
   const [q, setQ] = useState("");
   const list = Object.values(users).sort((a, b) => b.lastActive - a.lastActive).filter((u) => { const s = q.trim().toLowerCase(); if (!s) return true; return u.username.toLowerCase().includes(s) || u.email.toLowerCase().includes(s) || u.pets.some((p) => p.name.toLowerCase().includes(s)); });
   const totalPets = Object.values(users).reduce((s, u) => s + u.pets.length, 0);
@@ -1108,9 +1123,10 @@ function DevDashboard({ users, onLogout, onDelete }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 18 }}><Stat icon={<Users size={15} color="#1DB954" />} label="Users" value={Object.keys(users).length} /><Stat icon={<Sparkles size={15} color="#A9B4FF" />} label="Pets" value={totalPets} /><Stat icon={<Flame size={15} color="#F5C36B" />} label="Top streak" value={Object.values(users).reduce((m, u) => Math.max(m, u.best), 0)} /></div>
     {!Object.keys(users).length && <div className="card" style={{ padding: 24, textAlign: "center" }}><div className="muted" style={{ fontSize: 14 }}>No users have signed up yet.</div></div>}
     {list.map((u) => { const p = u.pets.find((x) => x.id === u.activePet) || u.pets[0]; return <div key={u.username} className="card" style={{ padding: 14, marginBottom: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}><div className="petframe" style={{ width: 48, height: 48 }}><Creature species={p.species} stage={p.stage} vitality={p.vitality} size={42} skin={p.skin} /></div><div style={{ flex: 1, minWidth: 0 }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>@{u.username} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {u.pets.length} pet{u.pets.length > 1 ? "s" : ""} · {(u.follows || []).length} connections</span></div><div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div></div><div style={{ display: "flex", alignItems: "center", gap: 5 }}><span className="dot" style={{ background: Date.now() - u.lastActive < 86400000 ? "#1DB954" : "#5a5a5a" }} /><span className="muted" style={{ fontSize: 11 }}>{relTime(u.lastActive)}</span></div></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}><div className="petframe" style={{ width: 48, height: 48 }}><Creature species={p.species} stage={p.stage} vitality={p.vitality} size={42} skin={p.skin} /></div><div style={{ flex: 1, minWidth: 0 }}><div className="disp" style={{ color: "#fff", fontWeight: 600, fontSize: 15 }}>@{u.username}{u.tester && <span className="prestige" style={{ background: "#A9B4FF", color: "#0c1030" }}>TESTER</span>} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {u.pets.length} pet{u.pets.length > 1 ? "s" : ""} · {(u.follows || []).length} connections</span></div><div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div></div><div style={{ display: "flex", alignItems: "center", gap: 5 }}><span className="dot" style={{ background: Date.now() - u.lastActive < 86400000 ? "#1DB954" : "#5a5a5a" }} /><span className="muted" style={{ fontSize: 11 }}>{relTime(u.lastActive)}</span></div></div>
       <div style={{ display: "flex", gap: 12, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.06)", flexWrap: "wrap", alignItems: "center" }}><Kv k="Active pet" v={p.name} /><Kv k="Tier" v={TIERS[p.stage]} /><Kv k="XP" v={p.totalXp} /><Kv k="Streak" v={u.streak} /><Kv k="Best" v={u.best} /><Kv k="Vit" v={`${p.vitality}%`} />
-        <button className="delbtn" onClick={() => { if (window.confirm(`Delete @${u.username}'s account and all their pets? This can't be undone.`)) onDelete(u.username); }}><Trash2 size={14} />Delete</button></div>
+        <button className="delbtn" onClick={() => { if (window.confirm(`Delete @${u.username}'s account and all their pets? This can't be undone.`)) onDelete(u.username); }}><Trash2 size={14} />Delete</button>
+        <button className="maxbtn" onClick={() => { if (window.confirm(`Max out @${u.username} for testing? It will be hidden from the leaderboard and friends.`)) onMax(u.username); }}><Sparkles size={14} />Max out</button></div>
     </div>; })}
   </div></div>;
 }
@@ -1218,6 +1234,8 @@ function Style() {
     .titlebadge{display:inline-block;padding:2px 10px;border-radius:999px;background:#242424;color:#c8c8c8;font-size:11.5px;font-weight:700;font-family:'Space Grotesk',sans-serif;border:1px solid rgba(255,255,255,.08)}
     .delbtn{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(249,138,138,.12);border:1px solid rgba(249,138,138,.35);color:#F98A8A;font-size:12px;font-weight:600;padding:6px 11px;border-radius:10px;cursor:pointer;font-family:'Inter',sans-serif}
     .delbtn:hover{background:rgba(249,138,138,.22)}
+    .maxbtn{display:inline-flex;align-items:center;gap:5px;background:rgba(169,180,255,.14);border:1px solid rgba(169,180,255,.4);color:#A9B4FF;font-size:12px;font-weight:600;padding:6px 11px;border-radius:10px;cursor:pointer;font-family:'Inter',sans-serif}
+    .maxbtn:hover{background:rgba(169,180,255,.24)}
     .c-flick{animation:flick .5s ease-in-out infinite alternate;transform-origin:center bottom}
     @keyframes flick{0%{transform:scaleY(1) scaleX(1)}100%{transform:scaleY(1.12) scaleX(.94)}}
     .c-bob{animation:pbob 2.6s ease-in-out infinite;transform-origin:center bottom}
