@@ -30,7 +30,7 @@ const SPECIES = {
   nimbo:  { name: "Nimbo",  feature: "cloud",   pal: { main: "#7E97F5", light: "#B7C6FF", dark: "#3C4DB0", belly: "#E4EAFF", bellyL: "#F3F6FF", accent: "#FFFFFF", line: "#242F82", iris: "#3C4DB0" } },
   cinder: { name: "Cinder", feature: "flame",   pal: { main: "#FF8A44", light: "#FFB585", dark: "#B83C0F", belly: "#FFDCC6", bellyL: "#FFF1E7", accent: "#FFD23F", line: "#7A2A0A", iris: "#B83C0F" } },
   mica:   { name: "Mica",   feature: "crystal", pal: { main: "#9098BE", light: "#C0C6E0", dark: "#454C78", belly: "#DFE3F2", bellyL: "#F0F1FA", accent: "#7EE8E8", line: "#2A3054", iris: "#454C78" } },
-  bonsai: { name: "Bonsai", feature: "plant", plant: true, pal: { main: "#5BB86A", light: "#8FDD98", dark: "#2E7A3C", belly: "#DCF3E2", bellyL: "#EFFBF2", accent: "#F7A8C0", line: "#1B4A24", iris: "#2E7A3C", trunk: "#7A4B27", trunkD: "#553318" } },
+  bonsai: { name: "Classic", feature: "plant", plant: true, pal: { main: "#5BB86A", light: "#8FDD98", dark: "#2E7A3C", belly: "#DCF3E2", bellyL: "#EFFBF2", accent: "#F7A8C0", line: "#1B4A24", iris: "#2E7A3C", trunk: "#7A4B27", trunkD: "#553318" } },
   vesper: { name: "Vesper", feature: "star",    pal: { main: "#A487FF", light: "#CDB9FF", dark: "#5A38B0", belly: "#EADFFF", bellyL: "#F6F1FF", accent: "#FFE07A", line: "#391E78", iris: "#5A38B0" }, rare: true },
 };
 const SKIN_PAL = {
@@ -60,7 +60,8 @@ const SPRITES = {
   cinder: ["/pets/cinder-0.png", "/pets/cinder-1.png", "/pets/cinder-2.png", "/pets/cinder-3.png"],
   mica: ["/pets/mica-0.png", "/pets/mica-1.png", "/pets/mica-2.png", "/pets/mica-3.png"],
   nimbo: ["/pets/nimbo-0.png", "/pets/nimbo-1.png", "/pets/nimbo-2.png", "/pets/nimbo-3.png"],
-  florn: ["/pets/florn-0.png", "/pets/florn-1.png", "/pets/florn-2.png", "/pets/florn-3.png"]
+  florn: ["/pets/florn-0.png", "/pets/florn-1.png", "/pets/florn-2.png", "/pets/florn-3.png"],
+  vesper: ["/pets/vesper-0.png", "/pets/vesper-1.png", "/pets/vesper-2.png", "/pets/vesper-3.png"]
 };
 
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
@@ -97,7 +98,7 @@ const TITLES = [
   { id: "m_nimbo", name: "Nimbo Master", how: "Reach Mythic with a Nimbo", check: (a) => speciesMastered(a, "nimbo") },
   { id: "m_cinder", name: "Cinder Master", how: "Reach Mythic with a Cinder", check: (a) => speciesMastered(a, "cinder") },
   { id: "m_mica", name: "Mica Master", how: "Reach Mythic with a Mica", check: (a) => speciesMastered(a, "mica") },
-  { id: "m_bonsai", name: "Bonsai Master", how: "Reach Mythic with a Bonsai", check: (a) => speciesMastered(a, "bonsai") },
+  { id: "m_bonsai", name: "Classic Master", how: "Reach Mythic with a Classic", check: (a) => speciesMastered(a, "bonsai") },
   { id: "creator", name: "The Creator", how: "Exclusive to the maker", check: (a) => (a.email || "").toLowerCase() === OWNER_EMAIL },
 ];
 const ownedTitles = (a) => TITLES.filter((t) => t.check(a));
@@ -700,7 +701,7 @@ function Auth({ onAuthed }) {
     {mode === "signup" && <>
       <label className="lbl">Name your companion</label><input className="txt" value={pet} onChange={(e) => setPet(e.target.value)} placeholder="unique pet name" />
       <label className="lbl">Choose a species</label>
-      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => (
+      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{["cinder", "mica", "nimbo", "florn", "bonsai"].map((k) => (
         <button key={k} onClick={() => setSpecies(k)} style={{ flex: 1, padding: "8px 2px 4px", borderRadius: 14, cursor: "pointer", background: species === k ? "#16241c" : "#181818", border: species === k ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <Creature species={k} stage={2} vitality={80} size={52} /><span className="disp" style={{ color: "#e9ebef", fontSize: 11, fontWeight: 600 }}>{SPECIES[k].name}</span></button>))}</div>
     </>}
@@ -850,7 +851,7 @@ function ProfileSetup({ uid, email, users, onDone, onLogout }) {
     <label className="lbl">Username</label><input className="txt" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="unique handle" />
     <label className="lbl">Name your companion</label><input className="txt" value={pet} onChange={(e) => setPet(e.target.value)} placeholder="unique pet name" />
     <label className="lbl">Choose a species</label>
-    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{["florn", "nimbo", "cinder", "mica", "bonsai"].map((k) => (
+    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>{["cinder", "mica", "nimbo", "florn", "bonsai"].map((k) => (
       <button key={k} onClick={() => setSpecies(k)} style={{ flex: 1, padding: "8px 2px 4px", borderRadius: 14, cursor: "pointer", background: species === k ? "#16241c" : "#181818", border: species === k ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.06)", display: "flex", flexDirection: "column", alignItems: "center" }}>
         <Creature species={k} stage={2} vitality={80} size={48} /><span className="disp" style={{ color: "#e9ebef", fontSize: 10.5, fontWeight: 600 }}>{SPECIES[k].name}</span></button>))}</div>
     {err && <div className="err">{err}</div>}
@@ -973,7 +974,10 @@ function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sen
   // total XP per user (sum of their pets)
   const totals = Object.values(users).filter((u) => u.email !== DEV.email).map((u) => ({ owner: u.username, total: (u.pets || []).reduce((s, p) => s + (p.totalXp || 0), 0), top: topPet(u) })).filter((u) => u.total > 0).sort((a, b) => b.total - a.total);
   const bySpecies = list.filter((u) => u.species === gsp);
-  const speciesIds = ["florn", "nimbo", "cinder", "mica", "bonsai", "vesper"];
+  const hasVesper = (acct.pets || []).some((p) => p.species === "vesper");
+  const speciesIds = hasVesper
+    ? ["cinder", "mica", "nimbo", "florn", "vesper", "bonsai"]
+    : ["cinder", "mica", "nimbo", "florn", "bonsai", "vesper"];
   return <div className="screen">
     <Header left={<><div className="eyebrow">Community</div><div className="h1" style={{ marginTop: 4 }}>Ranks</div></>} right={<div style={{ display: "flex", gap: 8 }}><button className="ghost" onClick={() => onRefresh && onRefresh()}><RefreshCw size={16} color="#8a8a8a" /></button><button className="avatarbtn" onClick={() => onOpen(me)}><Creature species={topPet(acct).species} stage={topPet(acct).stage} vitality={topPet(acct).vitality} size={30} skin={topPet(acct).skin} /></button></div>} />
     <div className="segwrap">
@@ -999,8 +1003,8 @@ function Ranks({ users, me, acct, list, activeId, myRank, friends, incoming, sen
       </>}
 
       {gmode === "species" && <>
-        <div style={{ display: "flex", gap: 7, overflowX: "auto", padding: "6px 0 12px" }}>{speciesIds.map((sp) => (
-          <button key={sp} onClick={() => setGsp(sp)} className="chip" style={{ flexShrink: 0, background: gsp === sp ? "#16241c" : "#181818", border: gsp === sp ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)" }}>{SPECIES[sp].name}</button>))}</div>
+        <div style={{ display: "flex", gap: 7, overflowX: "auto", padding: "6px 0 12px" }}>{speciesIds.map((sp) => { const locked = sp === "vesper" && !hasVesper; return (
+          <button key={sp} disabled={locked} onClick={() => { if (!locked) setGsp(sp); }} className="chip" style={{ flexShrink: 0, opacity: locked ? 0.5 : 1, background: gsp === sp && !locked ? "#16241c" : "#181818", border: gsp === sp && !locked ? "1px solid #1DB954" : "1px solid rgba(255,255,255,.08)", cursor: locked ? "default" : "pointer" }}>{locked && <Lock size={12} color="#6a6a6a" />}{SPECIES[sp].name}</button>); })}</div>
         <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>Top {SPECIES[gsp].name} companions by XP.</div>
         {!bySpecies.length && <div className="muted" style={{ fontSize: 13, textAlign: "center", padding: 20 }}>No {SPECIES[gsp].name} yet.</div>}
         {bySpecies.map((u, i) => { const mine = u.owner === me && u.id === activeId, m = i === 0 ? "#F5C36B" : i === 1 ? "#C9CDD6" : i === 2 ? "#D8956B" : null;
