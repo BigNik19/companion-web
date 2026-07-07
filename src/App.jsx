@@ -72,6 +72,10 @@ const FIRE_SPRITES = {
 const SP = ["cinder", "mica", "nimbo", "florn", "vesper"];
 const GLASSES = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-glasses-${i}.png`)]));
 const GLASSES_FIRE = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-glassesfire-${i}.png`)]));
+const PHONES = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-phones-${i}.png`)]));
+const PHONES_FIRE = Object.fromEntries(SP.map((s) => [s, [0, 1, 2, 3].map((i) => `/pets/${s}-phonesfire-${i}.png`)]));
+// sprite-swap accessories: which variant maps to use, in priority order
+const ACC_SPRITE = [["specs", GLASSES, GLASSES_FIRE], ["phones", PHONES, PHONES_FIRE]];
 
 // Accessories: xp = unlock by that pet's total XP; streak = unlock by best streak; wheel = won from spin.
 const ACCESSORIES = [
@@ -273,15 +277,17 @@ const SpriteCreature = React.memo(function SpriteCreature({ species, stage = 1, 
   const st = Math.max(0, Math.min(4, stage));
   const idx = formIdx(st);
   const onFire = pose === "fire";
-  const hasSpecs = (accessories || []).includes("specs");
+  const accList = accessories || [];
+  const accHit = ACC_SPRITE.find(([id]) => accList.includes(id)); // one sprite-accessory at a time
+  const NORM = accHit ? accHit[1] : null, FIRE = accHit ? accHit[2] : null;
   let src, firedArt = false;
   if (onFire) {
-    if (hasSpecs && GLASSES_FIRE[species]) { src = GLASSES_FIRE[species][idx]; firedArt = true; }
+    if (accHit && FIRE[species]) { src = FIRE[species][idx]; firedArt = true; }
     else if (FIRE_SPRITES[species]) { src = FIRE_SPRITES[species][idx]; firedArt = true; }
-    else if (hasSpecs && GLASSES[species]) { src = GLASSES[species][idx]; }
+    else if (accHit && NORM[species]) { src = NORM[species][idx]; }
     else { src = SPRITES[species][idx]; }
   } else {
-    src = (hasSpecs && GLASSES[species]) ? GLASSES[species][idx] : SPRITES[species][idx];
+    src = (accHit && NORM[species]) ? NORM[species][idx] : SPRITES[species][idx];
   }
   const mf = mood === "sick" ? "grayscale(.5) brightness(.82) " : mood === "tired" ? "saturate(.72) " : "";
   const sk = skin === "shiny" ? "hue-rotate(135deg) saturate(1.12) " : skin === "gilded" ? "sepia(1) saturate(2.6) hue-rotate(-12deg) brightness(1.05) contrast(1.05) " : "";
@@ -611,7 +617,19 @@ export default function App() {
     else { const np = newPet(sp, uniquePetName(SPECIES[sp].name, allPetNames(users))); a.pets.push(np); a.activePet = np.id; }
     commit(a);
   };
-  const toggleAcc = (id) => { const a = clone(); const p = a.pets.find((x) => x.id === pet.id); p.accessories = p.accessories.includes(id) ? p.accessories.filter((x) => x !== id) : [...p.accessories, id]; commit(a); };
+  const toggleAcc = (id) => {
+    const a = clone(); const p = a.pets.find((x) => x.id === pet.id);
+    const has = p.accessories.includes(id);
+    if (id === "halo") {
+      p.accessories = has ? p.accessories.filter((x) => x !== id) : [...p.accessories, id];
+    } else if (has) {
+      p.accessories = p.accessories.filter((x) => x !== id);
+    } else {
+      // turn this one on, clear other non-halo accessories (halo may stay)
+      p.accessories = [...p.accessories.filter((x) => x === "halo"), id];
+    }
+    commit(a);
+  };
   const setPose = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).pose = id; commit(a); };
   const setSkin = (id) => { const a = clone(); a.pets.find((x) => x.id === pet.id).skin = id; commit(a); };
   const prestigePet = () => { const a = clone(); const p = a.pets.find((x) => x.id === pet.id); if (p.stage < MAX_STAGE) return; p.prestige = (p.prestige || 0) + 1; p.stage = 0; p.xp = 0; if (p.skin && PRESTIGE_SKINS.some((s) => s.id === p.skin && s.prestige > p.prestige)) p.skin = null; commit(a); setFlash(`${p.name} prestiged to ★${p.prestige}! XP now flows faster.`); setBurst(true); setTimeout(() => setBurst(false), 1400); setTimeout(() => setFlash(null), 3000); };
